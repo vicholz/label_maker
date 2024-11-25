@@ -1,0 +1,275 @@
+<html>
+<head>
+    <title>Avery 5160 Label Maker (Google Contacts)</title>
+    <script>
+
+function CSVToArray(strData, strDelimiter){
+    // Check to see if the delimiter is defined. If not,
+    // then default to comma.
+    strDelimiter = (strDelimiter || ",");
+
+    // Create a regular expression to parse the CSV values.
+    var objPattern = new RegExp(
+        (
+            // Delimiters.
+            "(\\" + strDelimiter + "|\\r?\\n|\\r|^)" +
+
+            // Quoted fields.
+            "(?:\"([^\"]*(?:\"\"[^\"]*)*)\"|" +
+
+            // Standard fields.
+            "([^\"\\" + strDelimiter + "\\r\\n]*))"
+        ),
+        "gi"
+        );
+
+
+    // Create an array to hold our data. Give the array
+    // a default empty first row.
+    var arrData = [[]];
+
+    // Create an array to hold our individual pattern
+    // matching groups.
+    var arrMatches = null;
+
+
+    // Keep looping over the regular expression matches
+    // until we can no longer find a match.
+    while (arrMatches = objPattern.exec( strData )){
+
+        // Get the delimiter that was found.
+        var strMatchedDelimiter = arrMatches[ 1 ];
+
+        // Check to see if the given delimiter has a length
+        // (is not the start of string) and if it matches
+        // field delimiter. If id does not, then we know
+        // that this delimiter is a row delimiter.
+        if (
+            strMatchedDelimiter.length &&
+            (strMatchedDelimiter != strDelimiter)
+            ){
+
+            // Since we have reached a new row of data,
+            // add an empty row to our data array.
+            arrData.push( [] );
+
+        }
+
+
+        // Now that we have our delimiter out of the way,
+        // let's check to see which kind of value we
+        // captured (quoted or unquoted).
+        if (arrMatches[ 2 ]){
+
+            // We found a quoted value. When we capture
+            // this value, unescape any double quotes.
+            var strMatchedValue = arrMatches[ 2 ].replace(
+                new RegExp( "\"\"", "g" ),
+                "\""
+                );
+
+        } else {
+
+            // We found a non-quoted value.
+            var strMatchedValue = arrMatches[ 3 ];
+
+        }
+
+
+        // Now that we have our value string, let's add
+        // it to the data array.
+        arrData[ arrData.length - 1 ].push( strMatchedValue );
+    }
+
+    // Return the parsed data.
+    return( arrData );
+}
+
+
+function get_first_entity(entry){
+    // Get first entry for entity if more than one address
+    // city, state, zip
+    if (entry && entry.includes(" ::: ")){
+        return entry.split(" ::: ")[0];
+    }
+    return entry
+}
+
+
+function process_content(content){
+    // Remove quoted address possibly containing newline char
+    let content = content.replace(/\".*?\"/g, "");
+    return content
+}
+
+
+function update_input(){
+    //let input = document.createElement("input");
+    let input = document.getElementById("file-input")
+    input.type = 'file';
+    //input.id = "file-input";
+    input.onchange = e => {
+       // getting a hold of the file reference
+       var file = e.target.files[0]; 
+    
+       // setting up the reader
+       var reader = new FileReader();
+       reader.readAsText(file,'UTF-8');
+    
+       // here we tell the reader what to do when it's done reading...
+       reader.onload = readerEvent => {
+          var content = readerEvent.target.result; // this is the content!
+          let contacts = get_contacts(process_content(content));
+          contacts.forEach(contact => {
+            //document.write(`${contact.first_name} ${contact.last_name}<br>`)
+            //document.write(`${contact.street_address}<br>`)
+            //document.write(`${contact.city}, ${contact.state} ${contact.zip_code}<br>`)
+            //document.write("----<br>")
+            document.querySelector("#container").innerHTML += create_address_label(contact)
+          });
+          document.querySelector("#file-input").remove();
+       }
+    }
+}
+
+
+function create_contact_from_google_csv(entry){
+    // create contact object from google csv
+    const contact = new Object();
+    contact.first_name = entry[0];
+    contact.last_name = entry[2];
+    contact.street_address = get_first_entity(entry[31]);
+    contact.city = get_first_entity(entry[32]);
+    contact.state = get_first_entity(entry[34]);
+    contact.zip_code = get_first_entity(entry[35]);
+
+    return contact
+}
+
+
+function create_contact_from_outlook_csv(entry){
+    // create contact object from outlook csv
+    const contact = new Object();
+    contact.first_name = entry[0];
+    contact.last_name = entry[2];
+    contact.street_address = entry[19];
+    contact.city = entry[23];
+    contact.state = entry[24];
+    contact.zip_code = entry[25]
+
+    return contact
+}
+
+
+function get_contacts(file_content){
+    // create contacts from CSV array
+    let contacts = []
+    let entries = CSVToArray(file_content)
+    entries.forEach(entry => {
+        let contact = create_contact_from_google_csv(entry)
+        if (contact.first_name == "First Name") return;
+        if (
+            contact.first_name &&
+            contact.last_name &&
+            contact.street_address &&
+            contact.city &&
+            contact.state &&
+            contact.zip_code
+        ){
+            contacts.push(contact)
+        }
+    })
+    return contacts;
+}
+
+
+function family_name(e){
+    // convert name to "last_name Family"
+    let label_text_span = e.querySelector(".label-text")
+    parts = label_text_span.innerText.split("\n");
+    parts[0] = parts[0].split(" ").slice(-1) + " Family";
+    label_text_span.innerText = parts.join("\n");
+}
+
+
+function create_div_controls(){
+    // create controls div
+    return `<div class="controls" contenteditable=false>
+<br>
+<span onclick="this.parentNode.parentNode.remove();">X</span><br>
+<br>
+<span onclick="family_name(this.parentNode.parentNode);">F</span>
+</div>
+`
+}
+
+function create_address_label(contact){
+    // create label
+    let controls_div = create_div_controls()
+    return `<div class="label"><span class="label-text" contenteditable="plaintext-only">${contact.first_name} ${contact.last_name}
+${contact.street_address}
+${contact.city}, ${contact.state} ${contact.zip_code}
+</span>${controls_div}</div>`
+}
+
+    </script>
+    <style>
+        @media print {
+            @page {
+                size: portrait;
+                margin: 0.42in 0.22in 0.42in 0.22in;
+            }
+
+            .controls {
+                display: none;
+            }
+        }
+        
+        body {
+            width: 8.5in;
+            margin: 0in .1875in;
+        }
+
+        @page{
+            margin: 0.50in 0px 0px 0px;
+        }
+
+        .label {
+            /* Avery 5160 labels — CSS and HTML by MM at Boulder Information Services */
+            width: 2.025in; /* plus .6 inches from padding */
+            height: .875in; /* plus .125 inches from padding */
+            padding: .125in .3in 0;
+            margin-right: .125in; /* the gutter */
+            float: left;
+            text-align: left;
+            overflow: hidden;
+            outline: 1px dotted; /* outline doesn’t occupy space like border does */
+            border-radius: 10px;
+            vertical-align: middle;
+            line-height: .175in;
+            break-inside: avoid;
+            position: relative;
+        }
+
+        .controls {
+            position: absolute;
+            top: 0px;
+            right: 0px;
+        }
+
+        .page-break {
+            clear: left;
+            display: block;
+            page-break-after:always;
+        }
+
+        * { font-family: sans-serif; }
+    </style>
+</head>
+<body onload="update_input();">
+    <input type="file" id="file-input">
+    <div id="container">
+
+    </div>
+</body>
+</html>
