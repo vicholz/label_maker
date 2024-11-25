@@ -202,13 +202,9 @@ addEventListener("load", (event) => {
             var content = readerEvent.target.result; // this is the content!
             let contacts = get_contacts(process_content(content));
             contacts.forEach(contact => {
-            //document.write(`${contact.first_name} ${contact.last_name}<br>`)
-            //document.write(`${contact.street_address}<br>`)
-            //document.write(`${contact.city}, ${contact.state} ${contact.zip_code}<br>`)
-            //document.write("----<br>")
             document.querySelector("#container").innerHTML += create_address_label(contact)
             });
-            document.querySelector("#file-input").remove();
+            document.querySelector("#input").remove();
         }
     }
 });
@@ -269,7 +265,19 @@ addEventListener("load", (event) => {
     </style>
 </head>
 <body>
-    <input type="file" id="file-input">
+    <div id="input">
+        <input type="file" id="file-input"><br>
+        <h3>Instructions</h3>
+        <ol>
+            <li>Go to <a href="https://contacts.google.com" target="_blank">Google Contacts</a>.</li>
+            <li>Select contacts to export or export all.</li>
+            <li>Click `Choose File` and select the exported contacts file to generate labels.</li>
+            <li>Click `X` to remove labels.</li>
+            <li>Click `F` to convert name to `LASTNAME Family`</li>
+            <li>Edit as needed</li>
+            <li>Print when ready or reload the page to start over.</li>
+        <ol>
+    </div>
     <div id="container">
 
     </div>
