@@ -23,7 +23,6 @@ function CSVToArray(strData, strDelimiter){
         "gi"
         );
 
-
     // Create an array to hold our data. Give the array
     // a default empty first row.
     var arrData = [[]];
@@ -55,7 +54,6 @@ function CSVToArray(strData, strDelimiter){
 
         }
 
-
         // Now that we have our delimiter out of the way,
         // let's check to see which kind of value we
         // captured (quoted or unquoted).
@@ -75,7 +73,6 @@ function CSVToArray(strData, strDelimiter){
 
         }
 
-
         // Now that we have our value string, let's add
         // it to the data array.
         arrData[ arrData.length - 1 ].push( strMatchedValue );
@@ -86,58 +83,34 @@ function CSVToArray(strData, strDelimiter){
 }
 
 
-function get_first_entity(entry){
-    // Get first entry for entity if more than one address
-    // city, state, zip
-    if (entry && entry.includes(" ::: ")){
-        return entry.split(" ::: ")[0];
-    }
-    return entry
-}
-
-
 function process_content(content){
     // Remove quoted address possibly containing newline char
     let new_content = content.replace(/\".*?\"/g, "");
-    return new_content
+    return new_content;
 }
 
 
-function create_contact_from_google_csv(entry){
+function get_contacts_from_google_csv(entry){
     // create contact object from google csv
-    const contact = new Object();
-    contact.first_name = entry[0];
-    contact.last_name = entry[2];
-    contact.street_address = get_first_entity(entry[31]);
-    contact.city = get_first_entity(entry[32]);
-    contact.state = get_first_entity(entry[34]);
-    contact.zip_code = get_first_entity(entry[35]);
+    let contacts = [];
 
-    return contact
-}
+    let addresses = entry[31].split(" ::: ");
+    let cities = entry[32].split(" ::: ");
+    let states = entry[34].split(" ::: ");
+    let zip_codes = entry[35].split(" ::: ");
+    let countries = entry[36].split(" ::: ");
 
+    for (let i in addresses){
+        const contact = new Object();
+        contact.first_name = entry[0];
+        contact.last_name = entry[2];
+        contact.street_address = addresses[i] ? addresses[i] : addresses[0];
+        contact.city = cities[i] ? cities[i] : cities[0];
+        contact.state = states[i] ? states[i] : states[0];
+        contact.zip_code = zip_codes[i] ? zip_codes[i].split("-")[0] : zip_codes[0].split("-")[0];
+        contact.country = countries[i] ? countries[i] : countries[0];
 
-function create_contact_from_outlook_csv(entry){
-    // create contact object from outlook csv
-    const contact = new Object();
-    contact.first_name = entry[0];
-    contact.last_name = entry[2];
-    contact.street_address = entry[19];
-    contact.city = entry[23];
-    contact.state = entry[24];
-    contact.zip_code = entry[25]
-
-    return contact
-}
-
-
-function get_contacts(file_content){
-    // create contacts from CSV array
-    let contacts = []
-    let entries = CSVToArray(file_content)
-    entries.forEach(entry => {
-        let contact = create_contact_from_google_csv(entry)
-        if (contact.first_name == "First Name") return;
+        if (contact.first_name == "First Name") continue;
         if (
             contact.first_name &&
             contact.last_name &&
@@ -146,16 +119,32 @@ function get_contacts(file_content){
             contact.state &&
             contact.zip_code
         ){
-            contacts.push(contact)
+            contacts.push(contact);
         }
-    })
+    }
+    return contacts;
+}
+
+
+function get_contacts(file_content){
+    // create contacts from CSV array
+    let contacts = [];
+    let entries = CSVToArray(file_content);
+    entries.forEach(entry => {
+        if (entry[0]){
+            let google_contacts = get_contacts_from_google_csv(entry);
+            if (google_contacts.length > 0){
+                contacts = [...contacts, ...google_contacts];
+            }
+        }
+    });
     return contacts;
 }
 
 
 function family_name(e){
     // convert name to "last_name Family"
-    let label_text_span = e.querySelector(".label-text")
+    let label_text_span = e.querySelector(".label-text");
     parts = label_text_span.innerText.split("\n");
     parts[0] = parts[0].split(" ").slice(-1) + " Family";
     label_text_span.innerText = parts.join("\n");
@@ -170,25 +159,40 @@ function create_div_controls(){
 <br>
 <span onclick="family_name(this.parentNode.parentNode);">F</span>
 </div>
-`
+`;
 }
 
 
 function create_address_label(contact){
     // create label
-    let controls_div = create_div_controls()
-    return `<div class="label"><span class="label-text" contenteditable="plaintext-only">${contact.first_name} ${contact.last_name}
+    let controls_div = create_div_controls();
+    return `<div class="label"><text class="label-text" contenteditable="plaintext-only">${contact.first_name} ${contact.last_name}
 ${contact.street_address}
 ${contact.city}, ${contact.state} ${contact.zip_code}
-</span>${controls_div}</div>`
+${contact.country}
+</text>${controls_div}</div>`;
 }
 
 
+function resizeFontToFit(element) {
+    let fontSize = 16;
+    let overflow = false;
+  
+    while (!overflow && fontSize > 0) {
+        element.style.fontSize = fontSize + "px";
+        overflow = element.scrollWidth > element.clientWidth ||
+            element.scrollHeight > element.clientHeight;
+  
+        if (overflow) {
+            fontSize--;
+        }
+    }
+}
+  
+
 addEventListener("load", (event) => {
-    //let input = document.createElement("input");
-    let input = document.getElementById("file-input")
+    let input = document.getElementById("file-input");
     input.type = 'file';
-    //input.id = "file-input";
     input.onchange = e => {
         // getting a hold of the file reference
         var file = e.target.files[0]; 
@@ -202,9 +206,10 @@ addEventListener("load", (event) => {
             var content = readerEvent.target.result; // this is the content!
             let contacts = get_contacts(process_content(content));
             contacts.forEach(contact => {
-            document.querySelector("#container").innerHTML += create_address_label(contact)
+                document.querySelector("#container").innerHTML += create_address_label(contact);
             });
             document.querySelector("#input").remove();
+            //window.dispatchEvent(new Event('resize'));
         }
     }
 });
@@ -233,20 +238,25 @@ addEventListener("load", (event) => {
         }
 
         .label {
-            /* Avery 5160 labels — CSS and HTML by MM at Boulder Information Services */
+            /* Avery 5160 labels — CSS and HTML*/
             width: 2.025in; /* plus .6 inches from padding */
             height: .875in; /* plus .125 inches from padding */
-            padding: .125in .3in 0;
+            /*padding: .125in .3in 0;*/
+            padding: .125in .125in 0;
             margin-right: .125in; /* the gutter */
             float: left;
             text-align: left;
-            overflow: hidden;
             outline: 1px dotted; /* outline doesn’t occupy space like border does */
             border-radius: 10px;
             vertical-align: middle;
             line-height: .175in;
             break-inside: avoid;
             position: relative;
+        }
+
+        .label-text {
+            white-space: nowrap;
+            font-size: 100%;
         }
 
         .controls {
@@ -279,7 +289,6 @@ addEventListener("load", (event) => {
         <ol>
     </div>
     <div id="container">
-
     </div>
 </body>
 </html>
