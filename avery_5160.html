@@ -1,6 +1,6 @@
 <html>
 <head>
-    <title>Avery 5160 Label Maker (Google Contacts)</title>
+    <title>Avery **60 Label Maker</title>
     <script>
 
 function CSVToArray(strData, strDelimiter){
@@ -83,13 +83,6 @@ function CSVToArray(strData, strDelimiter){
 }
 
 
-function process_content(content){
-    // Remove quoted address possibly containing newline char
-    let new_content = content.replace(/\".*?\"/g, "");
-    return new_content;
-}
-
-
 function get_contacts_from_google_csv(entry){
     // create contact object from google csv
     let contacts = [];
@@ -112,8 +105,7 @@ function get_contacts_from_google_csv(entry){
 
         if (contact.first_name == "First Name") continue;
         if (
-            contact.first_name &&
-            contact.last_name &&
+            (contact.first_name || contact.last_name) &&
             contact.street_address &&
             contact.city &&
             contact.state &&
@@ -126,15 +118,72 @@ function get_contacts_from_google_csv(entry){
 }
 
 
+function get_contacts_from_outlook_csv(entry){
+    // create contact object from outlook csv
+    const contact = new Object();
+    contact.first_name = entry[0];
+    contact.last_name = entry[2];
+    contact.street_address = entry[19];
+    contact.city = entry[23];
+    contact.state = entry[24];
+    contact.zip_code = entry[25];
+    contact.country = entry[26];
+
+    if (contact.first_name == "First Name") return [];
+
+    if (
+        (contact.first_name || contact.last_name) &&
+        contact.street_address &&
+        contact.city &&
+        contact.state &&
+        contact.zip_code
+    ) {
+        return [contact];
+    } else {
+        let full_address = entry[18].split("\n");
+        if (full_address && full_address.length >= 2){
+            let street_address = full_address.shift();
+            let city_state_zip = full_address.shift();
+            let city = city_state_zip.split(",")[0];
+            let state = city_state_zip.split(",")[1].trim().split(" ")[0];
+            let zip = city_state_zip.split(",")[1].trim().split(" ")[1];
+            let country = full_address.length > 0 ? full_address.shift() : "";
+
+            if (
+                street_address &&
+                city &&
+                state &&
+                zip
+            ) {
+                contact.first_name = entry[0];
+                contact.last_name = entry[2];
+                contact.street_address = street_address;
+                contact.city = city;
+                contact.state = state;
+                contact.zip_code = zip;
+                contact.country = country;
+                return [contact];
+            }
+        }
+        return [];
+    }
+}
+
+
 function get_contacts(file_content){
     // create contacts from CSV array
     let contacts = [];
     let entries = CSVToArray(file_content);
     entries.forEach(entry => {
         if (entry[0]){
-            let google_contacts = get_contacts_from_google_csv(entry);
-            if (google_contacts.length > 0){
-                contacts = [...contacts, ...google_contacts];
+            let contact_list = [];
+            if (document.querySelector("#outlook_csv").checked){
+                contact_list = get_contacts_from_outlook_csv(entry);
+            } else {
+                contact_list = get_contacts_from_google_csv(entry);
+            }
+            if (contact_list.length > 0){
+                contacts = [...contacts, ...contact_list];
             }
         }
     });
@@ -166,16 +215,16 @@ function create_div_controls(){
 function create_address_label(contact){
     // create label
     let controls_div = create_div_controls();
-    return `<div class="label"><text class="label-text" contenteditable="plaintext-only">${contact.first_name} ${contact.last_name}
-${contact.street_address}
-${contact.city}, ${contact.state} ${contact.zip_code}
-${contact.country}
+    return `<div class="label"><text class="label-text label-name" contenteditable="plaintext-only">${contact.first_name} ${contact.last_name}</text><br>
+<text class="label-text label-address" contenteditable="plaintext-only">${contact.street_address}</text><br>
+<text class="label-text label-city-state-zip" contenteditable="plaintext-only">${contact.city}, ${contact.state} ${contact.zip_code}</text><br>
+<text class="label-text label-country" contenteditable="plaintext-only">${contact.country}</text>
 </text>${controls_div}</div>`;
 }
 
 
 function resizeFontToFit(element) {
-    let fontSize = 16;
+    let fontSize = 30;
     let overflow = false;
   
     while (!overflow && fontSize > 0) {
@@ -204,12 +253,11 @@ addEventListener("load", (event) => {
         // here we tell the reader what to do when it's done reading...
         reader.onload = readerEvent => {
             var content = readerEvent.target.result; // this is the content!
-            let contacts = get_contacts(process_content(content));
+            let contacts = get_contacts(content);
             contacts.forEach(contact => {
                 document.querySelector("#container").innerHTML += create_address_label(contact);
             });
             document.querySelector("#input").remove();
-            //window.dispatchEvent(new Event('resize'));
         }
     }
 });
@@ -255,8 +303,12 @@ addEventListener("load", (event) => {
         }
 
         .label-text {
-            white-space: nowrap;
-            font-size: 100%;
+            
+        }
+
+        .label-address {
+            height: 12px;
+            overflow: scroll;
         }
 
         .controls {
@@ -276,7 +328,6 @@ addEventListener("load", (event) => {
 </head>
 <body>
     <div id="input">
-        <input type="file" id="file-input"><br>
         <h3>Instructions</h3>
         <ol>
             <li>Go to <a href="https://contacts.google.com" target="_blank">Google Contacts</a>.</li>
@@ -286,7 +337,16 @@ addEventListener("load", (event) => {
             <li>Click `F` to convert name to `LASTNAME Family`</li>
             <li>Edit as needed</li>
             <li>Print when ready or reload the page to start over.</li>
-        <ol>
+        </ol>
+        <hr>
+        <form action="#">
+            <input type="radio" id="google_csv" name="csv_type" value="google_cvs" checked>
+            <label for="google_csv">Google CSV</label><br>
+            <input type="radio" id="outlook_csv" name="csv_type" value="outlook_csv">
+            <label for="outlook_csv">Outlook CSV</label><br>
+            <br>
+            <input type="file" id="file-input"><br>
+        </form>
     </div>
     <div id="container">
     </div>
