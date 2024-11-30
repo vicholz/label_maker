@@ -193,10 +193,11 @@ function get_contacts(file_content){
 
 function family_name(e){
     // convert name to "last_name Family"
-    let label_text_span = e.querySelector(".label-text");
-    parts = label_text_span.innerText.split("\n");
+    let label_text_element = e.querySelector(".label-text");
+    e.querySelector("span.family_name_button").remove();
+    parts = label_text_element.value.split("\n");
     parts[0] = parts[0].split(" ").slice(-1) + " Family";
-    label_text_span.innerText = parts.join("\n");
+    label_text_element.value = parts.join("\n");
 }
 
 
@@ -204,9 +205,9 @@ function create_div_controls(){
     // create controls div
     return `<div class="controls" contenteditable=false>
 <br>
-<span onclick="this.parentNode.parentNode.remove();">X</span><br>
+<span class="close_button" onclick="this.parentNode.parentNode.remove();">X</span><br>
 <br>
-<span onclick="family_name(this.parentNode.parentNode);">F</span>
+<span class="family_name_button" onclick="family_name(this.parentNode.parentNode);">F</span>
 </div>
 `;
 }
@@ -214,30 +215,37 @@ function create_div_controls(){
 
 function create_address_label(contact){
     // create label
+    let label_content = `${contact.first_name} ${contact.last_name}
+${contact.street_address}
+${contact.city}, ${contact.state} ${contact.zip_code}`;
+    if (contact.country){
+        label_content += `
+${contact.country}`
+    }
     let controls_div = create_div_controls();
-    return `<div class="label"><text class="label-text label-name" contenteditable="plaintext-only">${contact.first_name} ${contact.last_name}</text><br>
-<text class="label-text label-address" contenteditable="plaintext-only">${contact.street_address}</text><br>
-<text class="label-text label-city-state-zip" contenteditable="plaintext-only">${contact.city}, ${contact.state} ${contact.zip_code}</text><br>
-<text class="label-text label-country" contenteditable="plaintext-only">${contact.country}</text>
-</text>${controls_div}</div>`;
+    return `<div class="label"><textarea class="label-text" contenteditable=true onkeyup="resizeFontToFit(this);">${label_content}</textarea>
+${controls_div}</div>`;
 }
 
 
 function resizeFontToFit(element) {
+    
     let fontSize = 30;
-    let overflow = false;
+    let overflow = true;
   
-    while (!overflow && fontSize > 0) {
-        element.style.fontSize = fontSize + "px";
+    while (overflow && fontSize > 0) {
+        element.style.fontSize = `${fontSize}px`;
         overflow = element.scrollWidth > element.clientWidth ||
             element.scrollHeight > element.clientHeight;
-  
+        console.log(element)
+        console.log(`overflow = ${overflow}`)
+        console.log(`fontSize = ${fontSize}`)
         if (overflow) {
             fontSize--;
         }
     }
 }
-  
+
 
 addEventListener("load", (event) => {
     let input = document.getElementById("file-input");
@@ -258,6 +266,9 @@ addEventListener("load", (event) => {
                 document.querySelector("#container").innerHTML += create_address_label(contact);
             });
             document.querySelector("#input").remove();
+            document.querySelectorAll(".label-text").forEach(e => {
+                resizeFontToFit(e);
+            })
         }
     }
 });
@@ -290,25 +301,24 @@ addEventListener("load", (event) => {
             width: 2.025in; /* plus .6 inches from padding */
             height: .875in; /* plus .125 inches from padding */
             /*padding: .125in .3in 0;*/
-            padding: .125in .125in 0;
+            padding: .125in .125in .125in .125in;
             margin-right: .125in; /* the gutter */
             float: left;
             text-align: left;
             outline: 1px dotted; /* outline doesn’t occupy space like border does */
             border-radius: 10px;
             vertical-align: middle;
-            line-height: .175in;
             break-inside: avoid;
             position: relative;
         }
 
         .label-text {
-            
-        }
-
-        .label-address {
-            height: 12px;
-            overflow: scroll;
+            width: 100%;
+            height: 100%;
+            white-space: nowrap;
+            resize: none;
+            border: none;
+            outline: none;
         }
 
         .controls {
@@ -320,7 +330,7 @@ addEventListener("load", (event) => {
         .page-break {
             clear: left;
             display: block;
-            page-break-after:always;
+            page-break-after: always;
         }
 
         * { font-family: sans-serif; }
