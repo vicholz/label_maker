@@ -1,6 +1,6 @@
 <html>
 <head>
-    <title>Avery **60 Label Maker</title>
+    <title>Avery 5160/8160 Label Maker</title>
     <script>
 
 function CSVToArray(strData, strDelimiter){
@@ -237,9 +237,6 @@ function resizeFontToFit(element) {
         element.style.fontSize = `${fontSize}px`;
         overflow = element.scrollWidth > element.clientWidth ||
             element.scrollHeight > element.clientHeight;
-        console.log(element)
-        console.log(`overflow = ${overflow}`)
-        console.log(`fontSize = ${fontSize}`)
         if (overflow) {
             fontSize--;
         }
@@ -319,6 +316,7 @@ addEventListener("load", (event) => {
             resize: none;
             border: none;
             outline: none;
+            align-content: center;
         }
 
         .controls {
