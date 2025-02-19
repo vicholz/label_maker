@@ -3,6 +3,250 @@
     <title>Avery 5160/8160 Label Maker</title>
     <script>
 
+
+INDEX_DATA = [
+    {
+        "name": "first_name",
+        "data": {
+            "google": {
+                "header": "First Name",
+                "index": 0
+            },
+            "outlook": {
+                "header": "First Name",
+                "index": 0
+            }
+        }
+    },
+    {
+        "name": "last_name",
+        "data": {
+            "google": {
+                "header": "Last Name",
+                "index": 2
+            },
+            "outlook": {
+                "header": "Last Name",
+                "index": 2
+            }
+        }
+    },
+    {
+        "name": "organization_name",
+        "data": {
+            "google": {
+                "header": "Organization Name",
+                "index": 10
+            },
+            "outlook": {
+                "header": "Company",
+                "index": 37
+            }
+        }
+    },
+    {
+        "name": "address_1_formatted",
+        "data": {
+            "google": {
+                "header": "Address 1 - Formatted",
+                "index": 30
+            },
+            "outlook": {
+                "header": "Home Address",
+                "index": 18
+            }
+        }
+    },
+    {
+        "name": "address_2_formatted",
+        "data": {
+            "google": {
+                "header": "Address 2 - Formatted",
+                "index": 39
+            },
+            "outlook": {
+                "header": "Other Address",
+                "index": 51
+            }
+        }
+    },
+    {
+        "name": "address_1_street",
+        "data": {
+            "google": {
+                "header": "Address 1 - Street",
+                "index": 31
+            },
+            "outlook": {
+                "header": "Home Street",
+                "index": 19
+            }
+        }
+    },
+    {
+        "name": "address_1_city",
+        "data": {
+            "google": {
+                "header": "Address 1 - City",
+                "index": 32
+            },
+            "outlook": {
+                "header": "Home City",
+                "index": 23
+            }
+        }
+    },
+    {
+        "name": "address_1_po_box",
+        "data": {
+            "google": {
+                "header": "Address 1 - PO Box",
+                "index": 33
+            },
+            "outlook": {
+                "header": "Home Address PO Box",
+                "index": 22
+            }
+        }
+    },
+    {
+        "name": "address_1_region",
+        "data": {
+            "google": {
+                "header": "Address 1 - Region",
+                "index": 34
+            },
+            "outlook": {
+                "header": "Home State",
+                "index": 24
+            }
+        }
+    },
+    {
+        "name": "address_1_postal_code",
+        "data": {
+            "google": {
+                "header": "Address 1 - Postal Code",
+                "index": 35
+            },
+            "outlook": {
+                "header": "Home Postal Code",
+                "index": 25
+            }
+        }
+    },
+    {
+        "name": "address_1_country",
+        "data": {
+            "google": {
+                "header": "Address 1 - Country",
+                "index": 36
+            },
+            "outlook": {
+                "header": "Home Country",
+                "index": 26
+            }
+        }
+    },
+    {
+        "name": "address_2_street",
+        "data": {
+            "google": {
+                "header": "Address 2 - Street",
+                "index": 40
+            },
+            "outlook": {
+                "header": "Other Street",
+                "index": 52
+            }
+        }
+    },
+    {
+        "name": "address_2_city",
+        "data": {
+            "google": {
+                "header": "Address 2 - City",
+                "index": 41
+            },
+            "outlook": {
+                "header": "Other City",
+                "index": 56
+            }
+        }
+    },
+    {
+        "name": "address_2_po_box",
+        "data": {
+            "google": {
+                "header": "Address 2 - PO Box",
+                "index": 42
+            },
+            "outlook": {
+                "header": "Other Address PO Box",
+                "index": 55
+            }
+        }
+    },
+    {
+        "name": "address_2_region",
+        "data": {
+            "google": {
+                "header": "Address 2 - Region",
+                "index": 43
+            },
+            "outlook": {
+                "header": "Other State",
+                "index": 57
+            }
+        }
+    },
+    {
+        "name": "address_2_postal_code",
+        "data": {
+            "google": {
+                "header": "Address 2 - Postal Code",
+                "index": 44
+            },
+            "outlook": {
+                "header": "Other Postal Code",
+                "index": 58
+            }
+        }
+    },
+    {
+        "name": "address_2_country",
+        "data": {
+            "google": {
+                "header": "Address 2 - Country",
+                "index": 45
+            },
+            "outlook": {
+                "header": "Address 2 - Country",
+                "index": 45
+            }
+        }
+    }
+];
+
+
+function get_index_data(csv_data, type){
+    let headers = csv_data[0];
+    let index_data = []
+    INDEX_DATA.forEach(function (field){
+        let index = field.data[type].index;
+        let new_index = headers.indexOf(field.data[type].header);
+        if (new_index >= 0){
+            index = new_index;
+        }
+        index_data.push({
+            "name": field.name,
+            "index": index
+        })
+    });
+    return index_data;
+}
+
+
 function CSVToArray(strData, strDelimiter){
     // Check to see if the delimiter is defined. If not,
     // then default to comma.
@@ -83,113 +327,17 @@ function CSVToArray(strData, strDelimiter){
 }
 
 
-function get_contacts_from_google_csv(entry){
-    // create contact object from google csv
+function get_contacts(csv_data, index_data){
     let contacts = [];
-
-    let addresses = entry[31].split(" ::: ");
-    let cities = entry[32].split(" ::: ");
-    let states = entry[34].split(" ::: ");
-    let zip_codes = entry[35].split(" ::: ");
-    let countries = entry[36].split(" ::: ");
-
-    for (let i in addresses){
-        const contact = new Object();
-        contact.first_name = entry[0];
-        contact.last_name = entry[2];
-        contact.street_address = addresses[i] ? addresses[i] : addresses[0];
-        contact.city = cities[i] ? cities[i] : cities[0];
-        contact.state = states[i] ? states[i] : states[0];
-        contact.zip_code = zip_codes[i] ? zip_codes[i].split("-")[0] : zip_codes[0].split("-")[0];
-        contact.country = countries[i] ? countries[i] : countries[0];
-
-        if (contact.first_name == "First Name") continue;
-        if (
-            (contact.first_name || contact.last_name) &&
-            contact.street_address &&
-            contact.city &&
-            contact.state &&
-            contact.zip_code
-        ){
-            contacts.push(contact);
-        }
-    }
-    return contacts;
-}
-
-
-function get_contacts_from_outlook_csv(entry){
-    // create contact object from outlook csv
-    const contact = new Object();
-    contact.first_name = entry[0];
-    contact.last_name = entry[2];
-    contact.street_address = entry[19];
-    contact.city = entry[23];
-    contact.state = entry[24];
-    contact.zip_code = entry[25];
-    contact.country = entry[26];
-
-    if (contact.first_name == "First Name") return [];
-
-    if (
-        (contact.first_name || contact.last_name) &&
-        contact.street_address &&
-        contact.city &&
-        contact.state &&
-        contact.zip_code
-    ) {
-        return [contact];
-    } else {
-        let full_address = entry[18].split("\n");
-        if (full_address && full_address.length >= 2){
-            let street_address = full_address.shift();
-            let city_state_zip = full_address.shift();
-            let city = city_state_zip.split(",")[0];
-            let state = city_state_zip.split(",")[1].trim().split(" ")[0];
-            let zip = city_state_zip.split(",")[1].trim().split(" ")[1];
-            let country = full_address.length > 0 ? full_address.shift() : "";
-
-            if (
-                street_address &&
-                city &&
-                state &&
-                zip
-            ) {
-                contact.first_name = entry[0];
-                contact.last_name = entry[2];
-                contact.street_address = street_address;
-                contact.city = city;
-                contact.state = state;
-                contact.zip_code = zip;
-                contact.country = country;
-                return [contact];
-            }
-        }
-        return [];
-    }
-}
-
-
-function get_contacts(file_content){
-    // create contacts from CSV array
-    let contacts = [];
-    let entries = CSVToArray(file_content);
-    entries.forEach(entry => {
-        if (entry[0]){
-            let contact_list = [];
-            if (document.querySelector("#outlook_csv").checked){
-                contact_list = get_contacts_from_outlook_csv(entry);
-            } else {
-                contact_list = get_contacts_from_google_csv(entry);
-            }
-            if (contact_list.length > 0){
-                contacts = [...contacts, ...contact_list];
-            }
-        }
+    csv_data.forEach(function(contact_data){
+        let contact = {};
+        index_data.forEach(function(field){
+            contact[field.name] = contact_data[field.index];
+        });
+        contacts.push(contact);
     });
     return contacts;
 }
-
 
 function family_name(e){
     // convert name to "last_name Family"
@@ -202,7 +350,6 @@ function family_name(e){
 
 
 function create_div_controls(){
-    // create controls div
     return `<div class="controls" contenteditable=false>
 <br>
 <span class="close_button" onclick="this.parentNode.parentNode.remove();">X</span><br>
@@ -213,23 +360,51 @@ function create_div_controls(){
 }
 
 
-function create_address_label(contact){
-    // create label
-    let label_content = `${contact.first_name} ${contact.last_name}
-${contact.street_address}
-${contact.city}, ${contact.state} ${contact.zip_code}`;
-    if (contact.country){
-        label_content += `
-${contact.country}`
+function create_address_labels(contact){
+    let label_content = "";
+    if (contact.organization_name){
+        label_content += `${contact.organization_name}`;
     }
-    let controls_div = create_div_controls();
-    return `<div class="label"><textarea class="label-text" contenteditable=true onkeyup="resizeFontToFit(this);">${label_content}</textarea>
-${controls_div}</div>`;
+    if (contact.first_name || contact.last_name){
+        if (contact.organization_name){
+            label_content += "\n";
+        }
+        label_content += `${contact.first_name} ${contact.last_name}`;
+    }
+    let address_1 = `${label_content}\n`;
+    if (contact.address_1_street && contact.address_1_city && contact.address_1_region && contact.address_1_postal_code){
+        address_1 += `${contact.address_1_street}\n${contact.address_1_city}, ${contact.address_1_region} ${contact.address_1_postal_code}`
+        if (contact.address_1_country){
+            address_1 += ` ${contact.address_1_country}`
+        }
+    }  else if (contact.address_1_formatted){
+        address_1 += `${contact.address_1_formatted}`;
+    }
+
+    let address_2 = `${label_content}\n`;
+    if (contact.address_2_street && contact.address_2_city && contact.address_2_region && contact.address_2_postal_code){
+        address_2 += `${contact.address_2_street}\n${contact.address_2_city}, ${contact.address_2_region} ${contact.address_2_postal_code}`
+        if (contact.address_2_country){
+            address_2 += ` ${contact.address_2_country}`
+        }
+    }  else if (contact.address_2_formatted){
+        address_2 += `${contact.address_2_formatted}`;
+    }
+
+    let label_html = "";
+    if (address_1){
+        let controls_div = create_div_controls();
+        label_html += `<div class="label"><textarea class="label-text" contenteditable=true onkeyup="resizeFontToFit(this);">${address_1}</textarea>${controls_div}</div>`;
+    }
+    if (address_2){
+        let controls_div = create_div_controls();
+        label_html += `<div class="label"><textarea class="label-text" contenteditable=true onkeyup="resizeFontToFit(this);">${address_2}</textarea>${controls_div}</div>`;
+    }
+    return label_html;
 }
 
 
 function resizeFontToFit(element) {
-    
     let fontSize = 30;
     let overflow = true;
   
@@ -248,24 +423,42 @@ addEventListener("load", (event) => {
     let input = document.getElementById("file-input");
     input.type = 'file';
     input.onchange = e => {
-        // getting a hold of the file reference
-        var file = e.target.files[0]; 
+        try {
+            // getting a hold of the file reference
+            let file = e.target.files[0]; 
+            let file_extension = file.name.split(".").pop().toLowerCase();
+            if (file_extension !== "csv"){
+                throw new Error(`Files with extention '${file_extension}' are not supported. Only CSV files are supported.`);
+            }
 
-        // setting up the reader
-        var reader = new FileReader();
-        reader.readAsText(file,'UTF-8');
+            // setting up the reader
+            let reader = new FileReader();
+            reader.readAsText(file,'UTF-8');
 
-        // here we tell the reader what to do when it's done reading...
-        reader.onload = readerEvent => {
-            var content = readerEvent.target.result; // this is the content!
-            let contacts = get_contacts(content);
-            contacts.forEach(contact => {
-                document.querySelector("#container").innerHTML += create_address_label(contact);
-            });
+            // here we tell the reader what to do when it's done reading...
+            reader.onload = readerEvent => {
+                let csv_data = CSVToArray(readerEvent.target.result); // this is the content!
+                
+                let type = document.querySelector("#action_form").querySelector("input[type='radio']:checked").value;
+                let index_data = get_index_data(csv_data, type);
+                console.log(index_data);
+
+                csv_data.shift();
+                let contacts = get_contacts(csv_data, index_data);
+
+                contacts.forEach(contact => {
+                    document.querySelector("#container").innerHTML += create_address_labels(contact);
+                });
+                document.querySelector("#input").remove();
+                document.querySelectorAll(".label-text").forEach(e => {
+                    resizeFontToFit(e);
+                })
+            }
+        } catch(e) {
+            console.error(e);
             document.querySelector("#input").remove();
-            document.querySelectorAll(".label-text").forEach(e => {
-                resizeFontToFit(e);
-            })
+            document.querySelector("#container").innerHTML = "<h1>ERROR: Could not load provided file. Please ensure it is a valid CSV file of the selected type.</h1>";
+            return;
         }
     }
 });
@@ -358,10 +551,10 @@ addEventListener("load", (event) => {
             <li>Print when ready or reload the page to start over.</li>
         </ol>
         <hr>
-        <form action="#">
-            <input type="radio" id="google_csv" name="csv_type" value="google_cvs" checked>
+        <form id="action_form" action="#">
+            <input type="radio" id="google_csv" name="csv_type" value="google" checked>
             <label for="google_csv">Google CSV</label><br>
-            <input type="radio" id="outlook_csv" name="csv_type" value="outlook_csv">
+            <input type="radio" id="outlook_csv" name="csv_type" value="outlook">
             <label for="outlook_csv">Outlook CSV</label><br>
             <br>
             <input type="file" id="file-input"><br>
