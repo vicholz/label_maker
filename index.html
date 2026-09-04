@@ -727,12 +727,52 @@ let loadedHeaders = [];
 let loadedFileType = null;
 let rawCsvData = null;
 
+function getFilterTerms() {
+    const input = document.querySelector("#label-filter");
+    const raw = input ? input.value : "";
+    return raw.split(",").map(term => term.trim().toLowerCase()).filter(Boolean);
+}
+
+function updateFilterClearButton() {
+    const input = document.querySelector("#label-filter");
+    const clear = document.querySelector("#label-filter-clear");
+    if (!input || !clear) return;
+    clear.hidden = !input.value;
+}
+
+function applyLabelFilter() {
+    const terms = getFilterTerms();
+    const labels = document.querySelectorAll("#labels-container .label");
+    labels.forEach(label => {
+        const text = (label.querySelector(".label-text")?.value || "").toLowerCase();
+        const matches = terms.length === 0 || terms.some(term => text.includes(term));
+        label.classList.toggle("is-filtered-out", !matches);
+    });
+    updateFilterClearButton();
+    updateStatsDisplay();
+}
+
+function clearLabelFilter() {
+    const input = document.querySelector("#label-filter");
+    if (!input) return;
+    input.value = "";
+    applyLabelFilter();
+    input.focus();
+}
+
 function updateStatsDisplay() {
     const stats = document.querySelector("#stats");
     const toolbarStats = document.querySelector("#toolbar-stats");
     const text = `Labels loaded: ${contactsLoaded}, Skipped: ${contactsSkipped}`;
     stats.textContent = text;
-    if (toolbarStats) toolbarStats.textContent = text;
+    if (!toolbarStats) return;
+    const labels = document.querySelectorAll("#labels-container .label");
+    const visible = document.querySelectorAll("#labels-container .label:not(.is-filtered-out)").length;
+    if (document.body.classList.contains("showing-labels") && labels.length && getFilterTerms().length) {
+        toolbarStats.textContent = `Showing ${visible} of ${labels.length}`;
+    } else {
+        toolbarStats.textContent = text;
+    }
 }
 
 function renderLabels() {
@@ -741,6 +781,7 @@ function renderLabels() {
     container.querySelectorAll(".label-text").forEach(e => {
         resizeFontToFit(e);
     });
+    applyLabelFilter();
 }
 
 function showLabels() {
@@ -1101,8 +1142,28 @@ addEventListener("load", (event) => {
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
             closeSettingsPanel();
+            const filterInput = document.querySelector("#label-filter");
+            if (document.body.classList.contains("showing-labels") && filterInput && document.activeElement === filterInput && filterInput.value) {
+                clearLabelFilter();
+            }
         }
     });
+
+    const filterInput = document.querySelector("#label-filter");
+    const filterClear = document.querySelector("#label-filter-clear");
+    if (filterInput) {
+        filterInput.addEventListener("input", applyLabelFilter);
+        filterInput.addEventListener("search", applyLabelFilter);
+        filterInput.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && filterInput.value) {
+                e.preventDefault();
+                clearLabelFilter();
+            }
+        });
+    }
+    if (filterClear) {
+        filterClear.addEventListener("click", clearLabelFilter);
+    }
     
     const input = document.getElementById("file-input");
     input.addEventListener("change", e => {
@@ -1225,6 +1286,9 @@ addEventListener("load", (event) => {
             #settings-panel,
             #settings-panel-backdrop,
             #stats {
+                display: none !important;
+            }
+            .label.is-filtered-out {
                 display: none !important;
             }
             html, body {
@@ -1701,11 +1765,73 @@ addEventListener("load", (event) => {
             padding: 8px;
             gap: 8px;
             align-items: center;
+            flex-wrap: wrap;
+            max-width: calc(100vw - 32px);
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
         }
 
         body.showing-labels .label-toolbar {
             display: flex;
+        }
+
+        .label.is-filtered-out {
+            display: none;
+        }
+
+        .label-filter {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .label-filter input {
+            width: 220px;
+            max-width: 42vw;
+            padding: 6px 28px 6px 10px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            font: inherit;
+            font-size: 0.85rem;
+            background: #fff;
+            color: var(--ink);
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .label-filter input[type="search"]::-webkit-search-cancel-button,
+        .label-filter input[type="search"]::-webkit-search-decoration {
+            -webkit-appearance: none;
+        }
+
+        .label-filter input:focus {
+            outline: 2px solid var(--teal);
+            outline-offset: 1px;
+            border-color: var(--teal);
+        }
+
+        .label-filter-clear {
+            position: absolute;
+            right: 4px;
+            width: 22px;
+            height: 22px;
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--muted);
+            font: 700 16px/1 var(--font);
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            padding: 0;
+        }
+
+        .label-filter-clear:hover {
+            background: var(--bg);
+            color: var(--ink);
+        }
+
+        .label-filter-clear[hidden] {
+            display: none;
         }
 
         #toolbar-stats {
@@ -2039,6 +2165,10 @@ addEventListener("load", (event) => {
     </div>
     <div class="label-toolbar" role="toolbar" aria-label="Label actions">
         <button type="button" class="btn btn-secondary btn-small" onclick="backToSetup();">Back to setup</button>
+        <div class="label-filter">
+            <input id="label-filter" type="search" placeholder="Filter: Smith, Oak Ave" autocomplete="off" spellcheck="false" aria-label="Filter labels by matching text">
+            <button type="button" id="label-filter-clear" class="label-filter-clear" hidden aria-label="Clear filter">×</button>
+        </div>
         <span id="toolbar-stats"></span>
         <button type="button" class="btn btn-secondary btn-small reload-button" onclick="reloadLabels();" title="Reload all labels">Reload</button>
         <button type="button" class="btn btn-small" onclick="window.print();">Print</button>
