@@ -1,5 +1,8 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Avery 5160/8160 Label Maker</title>
     <script>
 
@@ -229,6 +232,23 @@ const DEFAULT_INDEX_DATA = [
     }
 ];
 
+const ADDRESS_FIELD_NAMES = new Set([
+    "address_1_formatted",
+    "address_2_formatted",
+    "address_1_street",
+    "address_1_city",
+    "address_1_po_box",
+    "address_1_region",
+    "address_1_postal_code",
+    "address_1_country",
+    "address_2_street",
+    "address_2_city",
+    "address_2_po_box",
+    "address_2_region",
+    "address_2_postal_code",
+    "address_2_country"
+]);
+
 // Load INDEX_DATA from localStorage or use default
 let INDEX_DATA = JSON.parse(JSON.stringify(DEFAULT_INDEX_DATA));
 function loadSettings() {
@@ -239,7 +259,6 @@ function loadSettings() {
             if (settings.indexData) {
                 INDEX_DATA = settings.indexData;
             } else {
-                // If no saved data, use default
                 INDEX_DATA = JSON.parse(JSON.stringify(DEFAULT_INDEX_DATA));
             }
             if (settings.skipNoAddress !== undefined) {
@@ -250,6 +269,9 @@ function loadSettings() {
             }
             if (settings.includeOrgWithName !== undefined) {
                 document.querySelector("#include-org-with-name").checked = settings.includeOrgWithName;
+            }
+            if (settings.preserveAddressSpaces !== undefined) {
+                document.querySelector("#preserve-address-spaces").checked = settings.preserveAddressSpaces;
             }
             if (settings.csvType) {
                 document.querySelector(`#${settings.csvType}_csv`).checked = true;
@@ -266,6 +288,7 @@ function saveSettings() {
         skipNoAddress: document.querySelector("#skip-no-address").checked,
         splitAddresses: document.querySelector("#split-addresses").checked,
         includeOrgWithName: document.querySelector("#include-org-with-name").checked,
+        preserveAddressSpaces: document.querySelector("#preserve-address-spaces").checked,
         csvType: document.querySelector("#action_form").querySelector("input[type='radio']:checked").value
     };
     localStorage.setItem('labelMakerSettings', JSON.stringify(settings));
@@ -274,12 +297,43 @@ function saveSettings() {
 function resetSettings() {
     INDEX_DATA = JSON.parse(JSON.stringify(DEFAULT_INDEX_DATA));
     localStorage.removeItem('labelMakerSettings');
-    // Reset form checkboxes to defaults
     document.querySelector("#skip-no-address").checked = false;
     document.querySelector("#split-addresses").checked = false;
     document.querySelector("#include-org-with-name").checked = false;
+    document.querySelector("#preserve-address-spaces").checked = false;
     document.querySelector("#google_csv").checked = true;
     updateSettingsUI();
+}
+
+function isAddressField(name) {
+    if (ADDRESS_FIELD_NAMES.has(name)) return true;
+    return typeof name === "string" && name.indexOf("address") !== -1;
+}
+
+function preserveAddressSpacesEnabled() {
+    const el = document.querySelector("#preserve-address-spaces");
+    return !!(el && el.checked);
+}
+
+function hasContent(value) {
+    return !!(value && String(value).trim());
+}
+
+function displayAddressValue(value) {
+    if (value == null) return "";
+    const str = String(value);
+    return preserveAddressSpacesEnabled() ? str : str.trim();
+}
+
+function escapeHtml(text) {
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+function escapeAttr(text) {
+    return escapeHtml(text).replace(/"/g, "&quot;");
 }
 
 function get_index_data(csv_data, type){
@@ -359,7 +413,7 @@ function CSVToArray(strData, strDelimiter){
         // Get the delimiter that was found.
         var strMatchedDelimiter = arrMatches[ 1 ];
 
-        // Check to see if the given delimiter has a length
+        // Check to see if the delimiter has a length
         // (is not the start of string) and if it matches
         // field delimiter. If id does not, then we know
         // that this delimiter is a row delimiter.
@@ -393,9 +447,8 @@ function CSVToArray(strData, strDelimiter){
 
         }
 
-        // Now that we have our value string, trim whitespace and add
-        // it to the data array.
-        strMatchedValue = strMatchedValue ? strMatchedValue.trim() : '';
+        // Keep original spacing so address fields can optionally preserve it.
+        strMatchedValue = strMatchedValue == null ? '' : strMatchedValue;
         arrData[ arrData.length - 1 ].push( strMatchedValue );
     }
 
@@ -410,9 +463,14 @@ function get_contacts(csv_data, index_data, splitAddresses = false){
         let contact = {};
         index_data.forEach(function(field){
             let value = contact_data[field.index];
-            // Trim whitespace from all values, treat whitespace-only as empty
-            let trimmedValue = value ? value.trim() : '';
-            contact[field.name] = trimmedValue || '';
+            if (value == null) {
+                contact[field.name] = '';
+            } else if (isAddressField(field.name)) {
+                // Store address fields as-is; display trimming is controlled by the option.
+                contact[field.name] = String(value);
+            } else {
+                contact[field.name] = String(value).trim();
+            }
         });
         
         if (splitAddresses) {
@@ -424,19 +482,19 @@ function get_contacts(csv_data, index_data, splitAddresses = false){
             };
             
             // Check if address_1 has any data (street, formatted, or complete address)
-            let hasAddr1Data = (contact.address_1_street && contact.address_1_street.trim()) ||
-                               (contact.address_1_formatted && contact.address_1_formatted.trim()) ||
+            let hasAddr1Data = hasContent(contact.address_1_street) ||
+                               hasContent(contact.address_1_formatted) ||
                                is_address_complete(contact.address_1_street, contact.address_1_city, contact.address_1_region, contact.address_1_postal_code);
             
             // Check if address_2 has any data (street, formatted, or complete address)
-            let hasAddr2Data = (contact.address_2_street && contact.address_2_street.trim()) ||
-                               (contact.address_2_formatted && contact.address_2_formatted.trim()) ||
+            let hasAddr2Data = hasContent(contact.address_2_street) ||
+                               hasContent(contact.address_2_formatted) ||
                                is_address_complete(contact.address_2_street, contact.address_2_city, contact.address_2_region, contact.address_2_postal_code);
             
             // Create contact for address_1 if it exists
             if (hasAddr1Data) {
                 let hasAddr1Complete = is_address_complete(contact.address_1_street, contact.address_1_city, contact.address_1_region, contact.address_1_postal_code);
-                let hasFormattedAddr1 = contact.address_1_formatted && contact.address_1_formatted.trim();
+                let hasFormattedAddr1 = hasContent(contact.address_1_formatted);
                 let contact1 = Object.assign({}, baseContact, {
                     address_1_street: contact.address_1_street,
                     address_1_city: contact.address_1_city,
@@ -453,7 +511,7 @@ function get_contacts(csv_data, index_data, splitAddresses = false){
             // Create contact for address_2 if it exists
             if (hasAddr2Data) {
                 let hasAddr2Complete = is_address_complete(contact.address_2_street, contact.address_2_city, contact.address_2_region, contact.address_2_postal_code);
-                let hasFormattedAddr2 = contact.address_2_formatted && contact.address_2_formatted.trim();
+                let hasFormattedAddr2 = hasContent(contact.address_2_formatted);
                 let contact2 = Object.assign({}, baseContact, {
                     address_2_street: contact.address_2_street,
                     address_2_city: contact.address_2_city,
@@ -479,8 +537,8 @@ function get_contacts(csv_data, index_data, splitAddresses = false){
             // Check if contact has a complete address (either address_1 or address_2)
             let hasAddr1 = is_address_complete(contact.address_1_street, contact.address_1_city, contact.address_1_region, contact.address_1_postal_code);
             let hasAddr2 = is_address_complete(contact.address_2_street, contact.address_2_city, contact.address_2_region, contact.address_2_postal_code);
-            let hasFormattedAddr1 = contact.address_1_formatted && contact.address_1_formatted.trim();
-            let hasFormattedAddr2 = contact.address_2_formatted && contact.address_2_formatted.trim();
+            let hasFormattedAddr1 = hasContent(contact.address_1_formatted);
+            let hasFormattedAddr2 = hasContent(contact.address_2_formatted);
             contact.complete_address = (hasAddr1 || hasFormattedAddr1) || (hasAddr2 || hasFormattedAddr2);
             contacts.push(contact);
         }
@@ -491,21 +549,21 @@ function get_contacts(csv_data, index_data, splitAddresses = false){
 function family_name(e){
     // convert name to "last_name Family"
     let label_text_element = e.querySelector(".label-text");
-    e.querySelector("span.family_name_button").remove();
-    parts = label_text_element.value.split("\n");
+    const familyButton = e.querySelector(".family_name_button");
+    if (familyButton) familyButton.remove();
+    let parts = label_text_element.value.split("\n");
     parts[0] = "The " + parts[0].split(" ").slice(-1) + " Family";
     label_text_element.value = parts.join("\n");
 }
 
 
 function create_div_controls(contact){
-    let familyTooltip = `Change name to 'The ${contact.last_name.trim()} Family'`;
+    const lastName = (contact.last_name || "").trim();
+    let familyTooltip = `Change name to 'The ${lastName} Family'`;
     
-    return `<div class="controls" contenteditable=false>
-<br>
-<span class="close_button" onclick="this.parentNode.parentNode.remove();" title="Remove this label">X</span><br>
-<br>
-<span class="family_name_button" onclick="family_name(this.parentNode.parentNode);" title="${familyTooltip}">F</span>
+    return `<div class="controls" contenteditable="false">
+<button type="button" class="label-btn close_button" onclick="this.parentNode.parentNode.remove();" title="Remove this label" aria-label="Remove this label">×</button>
+<button type="button" class="label-btn family_name_button" onclick="family_name(this.parentNode.parentNode);" title="${escapeAttr(familyTooltip)}" aria-label="${escapeAttr(familyTooltip)}">F</button>
 </div>
 `;
 }
@@ -538,11 +596,11 @@ function create_address_labels(contact){
     const alwaysIncludeOrg = document.querySelector("#include-org-with-name").checked;
     
     // Always include organization name if present and option is checked
-    if (contact.organization_name && contact.organization_name.trim() && alwaysIncludeOrg){
+    if (hasContent(contact.organization_name) && alwaysIncludeOrg){
         label_content += `${contact.organization_name}`;
     }
     if (contact.first_name || contact.last_name){
-        if (contact.organization_name && contact.organization_name.trim() && alwaysIncludeOrg){
+        if (hasContent(contact.organization_name) && alwaysIncludeOrg){
             label_content += "\n";
         }
         label_content += `${contact.first_name} ${contact.last_name}`;
@@ -553,35 +611,35 @@ function create_address_labels(contact){
     
     // Render address_1 if it exists in the contact object
     let hasAddr1Complete = is_address_complete(contact.address_1_street, contact.address_1_city, contact.address_1_region, contact.address_1_postal_code);
-    let hasFormattedAddr1 = contact.address_1_formatted && contact.address_1_formatted.trim();
-    let hasAddr1Data = hasAddr1Complete || hasFormattedAddr1 || (contact.address_1_street && contact.address_1_street.trim());
+    let hasFormattedAddr1 = hasContent(contact.address_1_formatted);
+    let hasAddr1Data = hasAddr1Complete || hasFormattedAddr1 || hasContent(contact.address_1_street);
     
     if (hasAddr1Data) {
         let address_1 = `${label_content}\n`;
         if (hasAddr1Complete) {
             // Use complete address format
-            address_1 += `${contact.address_1_street}\n${contact.address_1_city}, ${contact.address_1_region} ${contact.address_1_postal_code}`;
-            if (contact.address_1_country && contact.address_1_country.trim()){
-                address_1 += ` ${contact.address_1_country.trim()}`;
+            address_1 += `${displayAddressValue(contact.address_1_street)}\n${displayAddressValue(contact.address_1_city)}, ${displayAddressValue(contact.address_1_region)} ${displayAddressValue(contact.address_1_postal_code)}`;
+            if (hasContent(contact.address_1_country)){
+                address_1 += ` ${displayAddressValue(contact.address_1_country)}`;
             }
         } else if (hasFormattedAddr1) {
             // Use formatted address
-            address_1 += contact.address_1_formatted.trim();
-        } else if (contact.address_1_street && contact.address_1_street.trim()) {
+            address_1 += displayAddressValue(contact.address_1_formatted);
+        } else if (hasContent(contact.address_1_street)) {
             // Use whatever address data exists
-            if (contact.address_1_street.trim()) address_1 += contact.address_1_street.trim();
-            if (contact.address_1_city && contact.address_1_city.trim()) {
+            address_1 += displayAddressValue(contact.address_1_street);
+            if (hasContent(contact.address_1_city)) {
                 address_1 += address_1.endsWith('\n') ? '' : '\n';
-                address_1 += contact.address_1_city.trim();
-                if (contact.address_1_region && contact.address_1_region.trim()) {
-                    address_1 += `, ${contact.address_1_region.trim()}`;
+                address_1 += displayAddressValue(contact.address_1_city);
+                if (hasContent(contact.address_1_region)) {
+                    address_1 += `, ${displayAddressValue(contact.address_1_region)}`;
                 }
-                if (contact.address_1_postal_code && contact.address_1_postal_code.trim()) {
-                    address_1 += ` ${contact.address_1_postal_code.trim()}`;
+                if (hasContent(contact.address_1_postal_code)) {
+                    address_1 += ` ${displayAddressValue(contact.address_1_postal_code)}`;
                 }
             }
-            if (contact.address_1_country && contact.address_1_country.trim()){
-                address_1 += ` ${contact.address_1_country.trim()}`;
+            if (hasContent(contact.address_1_country)){
+                address_1 += ` ${displayAddressValue(contact.address_1_country)}`;
             }
         }
         
@@ -589,42 +647,42 @@ function create_address_labels(contact){
         let addressPart1 = address_1.substring(label_content.length).trim();
         if (addressPart1) {
             let controls_div = create_div_controls(contact);
-            label_html += `<div class="label"><textarea class="label-text" contenteditable=true onkeyup="resizeFontToFit(this);">${address_1}</textarea>${controls_div}</div>`;
+            label_html += `<div class="label"><textarea class="label-text" contenteditable="true" onkeyup="resizeFontToFit(this);">${escapeHtml(address_1)}</textarea>${controls_div}</div>`;
             labelsCreated++;
         }
     }
 
     // Render address_2 if it exists in the contact object
     let hasAddr2Complete = is_address_complete(contact.address_2_street, contact.address_2_city, contact.address_2_region, contact.address_2_postal_code);
-    let hasFormattedAddr2 = contact.address_2_formatted && contact.address_2_formatted.trim();
-    let hasAddr2Data = hasAddr2Complete || hasFormattedAddr2 || (contact.address_2_street && contact.address_2_street.trim());
+    let hasFormattedAddr2 = hasContent(contact.address_2_formatted);
+    let hasAddr2Data = hasAddr2Complete || hasFormattedAddr2 || hasContent(contact.address_2_street);
     
     if (hasAddr2Data) {
         let address_2 = `${label_content}\n`;
         if (hasAddr2Complete) {
             // Use complete address format
-            address_2 += `${contact.address_2_street}\n${contact.address_2_city}, ${contact.address_2_region} ${contact.address_2_postal_code}`;
-            if (contact.address_2_country && contact.address_2_country.trim()){
-                address_2 += ` ${contact.address_2_country.trim()}`;
+            address_2 += `${displayAddressValue(contact.address_2_street)}\n${displayAddressValue(contact.address_2_city)}, ${displayAddressValue(contact.address_2_region)} ${displayAddressValue(contact.address_2_postal_code)}`;
+            if (hasContent(contact.address_2_country)){
+                address_2 += ` ${displayAddressValue(contact.address_2_country)}`;
             }
         } else if (hasFormattedAddr2) {
             // Use formatted address
-            address_2 += contact.address_2_formatted.trim();
-        } else if (contact.address_2_street && contact.address_2_street.trim()) {
+            address_2 += displayAddressValue(contact.address_2_formatted);
+        } else if (hasContent(contact.address_2_street)) {
             // Use whatever address data exists
-            if (contact.address_2_street.trim()) address_2 += contact.address_2_street.trim();
-            if (contact.address_2_city && contact.address_2_city.trim()) {
+            address_2 += displayAddressValue(contact.address_2_street);
+            if (hasContent(contact.address_2_city)) {
                 address_2 += address_2.endsWith('\n') ? '' : '\n';
-                address_2 += contact.address_2_city.trim();
-                if (contact.address_2_region && contact.address_2_region.trim()) {
-                    address_2 += `, ${contact.address_2_region.trim()}`;
+                address_2 += displayAddressValue(contact.address_2_city);
+                if (hasContent(contact.address_2_region)) {
+                    address_2 += `, ${displayAddressValue(contact.address_2_region)}`;
                 }
-                if (contact.address_2_postal_code && contact.address_2_postal_code.trim()) {
-                    address_2 += ` ${contact.address_2_postal_code.trim()}`;
+                if (hasContent(contact.address_2_postal_code)) {
+                    address_2 += ` ${displayAddressValue(contact.address_2_postal_code)}`;
                 }
             }
-            if (contact.address_2_country && contact.address_2_country.trim()){
-                address_2 += ` ${contact.address_2_country.trim()}`;
+            if (hasContent(contact.address_2_country)){
+                address_2 += ` ${displayAddressValue(contact.address_2_country)}`;
             }
         }
         
@@ -632,7 +690,7 @@ function create_address_labels(contact){
         let addressPart2 = address_2.substring(label_content.length).trim();
         if (addressPart2) {
             let controls_div = create_div_controls(contact);
-            label_html += `<div class="label"><textarea class="label-text" contenteditable=true onkeyup="resizeFontToFit(this);">${address_2}</textarea>${controls_div}</div>`;
+            label_html += `<div class="label"><textarea class="label-text" contenteditable="true" onkeyup="resizeFontToFit(this);">${escapeHtml(address_2)}</textarea>${controls_div}</div>`;
             labelsCreated++;
         }
     }
@@ -640,7 +698,7 @@ function create_address_labels(contact){
     // If no labels were created (no address data), create a label with just the name/org
     if (labelsCreated === 0 && label_content.trim()) {
         let controls_div = create_div_controls(contact);
-        label_html += `<div class="label"><textarea class="label-text" contenteditable=true onkeyup="resizeFontToFit(this);">${label_content}</textarea>${controls_div}</div>`;
+        label_html += `<div class="label"><textarea class="label-text" contenteditable="true" onkeyup="resizeFontToFit(this);">${escapeHtml(label_content)}</textarea>${controls_div}</div>`;
     }
     
     return label_html;
@@ -669,38 +727,113 @@ let loadedHeaders = [];
 let loadedFileType = null;
 let rawCsvData = null;
 
+function updateStatsDisplay() {
+    const stats = document.querySelector("#stats");
+    const toolbarStats = document.querySelector("#toolbar-stats");
+    const text = `Labels loaded: ${contactsLoaded}, Skipped: ${contactsSkipped}`;
+    stats.textContent = text;
+    if (toolbarStats) toolbarStats.textContent = text;
+}
+
+function renderLabels() {
+    const container = document.querySelector("#labels-container");
+    container.innerHTML = loadedContacts.map(contact => create_address_labels(contact)).join("");
+    container.querySelectorAll(".label-text").forEach(e => {
+        resizeFontToFit(e);
+    });
+}
+
 function showLabels() {
+    if (rawCsvData) {
+        processFromRawCsv();
+    }
     if (loadedContacts.length === 0) {
         alert("No contacts loaded. Please load a CSV file first.");
         return;
     }
     
-    document.querySelector("#labels-container").style.display = "block";
-    document.querySelector("#show-labels-button").style.display = "none";
-    document.querySelector("#input").style.display = "none";
-    document.querySelector("#labels-container").innerHTML = "";
-    document.querySelector(".reload-button").style.display = "block";
-    
-    loadedContacts.forEach(contact => {
-        document.querySelector("#labels-container").innerHTML += create_address_labels(contact);
-    });
-    document.querySelectorAll(".label-text").forEach(e => {
-        resizeFontToFit(e);
-    });
+    document.body.classList.add("showing-labels");
+    renderLabels();
 }
 
 function reloadLabels() {
-    // Recreate labels from stored contacts
     if (loadedContacts.length === 0) {
         return;
     }
-    document.querySelector("#labels-container").innerHTML = "";
-    loadedContacts.forEach(contact => {
-        document.querySelector("#labels-container").innerHTML += create_address_labels(contact);
+    renderLabels();
+}
+
+function backToSetup() {
+    document.body.classList.remove("showing-labels");
+}
+
+function countLabelsForContact(contact) {
+    let labelsCount = 0;
+    let hasAddr1Complete = is_address_complete(contact.address_1_street, contact.address_1_city, contact.address_1_region, contact.address_1_postal_code);
+    let hasFormattedAddr1 = hasContent(contact.address_1_formatted);
+    let hasAddr1Data = hasAddr1Complete || hasFormattedAddr1 || hasContent(contact.address_1_street);
+    if (hasAddr1Data) {
+        labelsCount++;
+    }
+    let hasAddr2Complete = is_address_complete(contact.address_2_street, contact.address_2_city, contact.address_2_region, contact.address_2_postal_code);
+    let hasFormattedAddr2 = hasContent(contact.address_2_formatted);
+    let hasAddr2Data = hasAddr2Complete || hasFormattedAddr2 || hasContent(contact.address_2_street);
+    if (hasAddr2Data) {
+        labelsCount++;
+    }
+    if (labelsCount === 0) {
+        let hasName = hasContent(contact.first_name) || hasContent(contact.last_name);
+        let hasOrg = hasContent(contact.organization_name) && document.querySelector("#include-org-with-name").checked;
+        if (hasName || hasOrg) {
+            labelsCount = 1;
+        }
+    }
+    return labelsCount;
+}
+
+function processFromRawCsv() {
+    if (!rawCsvData) return false;
+
+    const csv_data = JSON.parse(JSON.stringify(rawCsvData));
+    const type = document.querySelector("#action_form").querySelector("input[type='radio']:checked").value;
+
+    loadedHeaders = (csv_data[0] || []).map(h => h ? String(h).trim() : '');
+    loadedFileType = type;
+
+    const index_data = get_index_data(csv_data, type);
+    csv_data.shift();
+
+    const skipNoAddress = document.querySelector("#skip-no-address").checked;
+    const splitAddresses = document.querySelector("#split-addresses").checked;
+    const includeOrgWithName = document.querySelector("#include-org-with-name").checked;
+    const preserveAddressSpaces = document.querySelector("#preserve-address-spaces").checked;
+
+    const allContacts = get_contacts(csv_data, index_data, splitAddresses);
+
+    contactsLoaded = 0;
+    contactsSkipped = 0;
+    loadedContacts = [];
+
+    console.log("Loading contacts with options:", {
+        skipNoAddress,
+        splitAddresses,
+        includeOrgWithName,
+        preserveAddressSpaces
     });
-    document.querySelectorAll(".label-text").forEach(e => {
-        resizeFontToFit(e);
+
+    allContacts.forEach(contact => {
+        if (skipNoAddress && !contact.complete_address) {
+            contactsSkipped++;
+        } else {
+            loadedContacts.push(contact);
+            contactsLoaded += countLabelsForContact(contact);
+        }
     });
+
+    saveSettings();
+    updateStatsDisplay();
+    document.body.classList.add("has-csv");
+    return true;
 }
 
 function updateSettingsUI() {
@@ -712,7 +845,7 @@ function updateSettingsUI() {
     
     // Only show settings if a file has been loaded
     if (!loadedFileType || loadedHeaders.length === 0) {
-        fieldsContainer.innerHTML = "<p>Please load a CSV file first to configure header mappings.</p>";
+        fieldsContainer.innerHTML = "<p class=\"settings-empty\">Please load a CSV file first to configure header mappings.</p>";
         return;
     }
     
@@ -721,9 +854,9 @@ function updateSettingsUI() {
     headerRow.className = "header-field-row header-row";
     const typeLabel = loadedFileType === "google" ? "Google CSV Header" : "Outlook CSV Header";
     headerRow.innerHTML = `
-        <label><strong>Field Name</strong></label>
-        <label><strong>${typeLabel}</strong></label>
-        <label></label>
+        <span>Field name</span>
+        <span>${typeLabel}</span>
+        <span></span>
     `;
     fieldsContainer.appendChild(headerRow);
     
@@ -733,19 +866,19 @@ function updateSettingsUI() {
         
         // Create dropdown with loaded headers
         const currentHeader = field.data[loadedFileType].header || '';
-        let dropdownOptions = '<option value="">-- Select Header --</option>';
+        let dropdownOptions = '<option value="">— Select header —</option>';
         loadedHeaders.forEach(header => {
             const selected = header === currentHeader ? 'selected' : '';
-            dropdownOptions += `<option value="${header}" ${selected}>${header}</option>`;
+            dropdownOptions += `<option value="${escapeAttr(header)}" ${selected}>${escapeHtml(header)}</option>`;
         });
         
         fieldDiv.innerHTML = `
-            <label>${field.name.replace(/_/g, ' ')}:</label>
-            <select data-field="${field.name}" data-type="${loadedFileType}" 
-                   style="flex: 1; margin: 0 5px;" onchange="saveHeaderSettings(); updateLabelPreview();">
+            <label>${escapeHtml(field.name.replace(/_/g, ' '))}</label>
+            <select data-field="${escapeAttr(field.name)}" data-type="${escapeAttr(loadedFileType)}"
+                   onchange="saveHeaderSettings(); updateLabelPreview();">
                 ${dropdownOptions}
             </select>
-            <button onclick="removeHeaderField(${idx})" style="padding: 2px 8px;">Remove</button>
+            <button type="button" class="btn btn-ghost btn-small" onclick="removeHeaderField(${idx})">Remove</button>
         `;
         fieldsContainer.appendChild(fieldDiv);
     });
@@ -823,9 +956,13 @@ function updateLabelPreview() {
         const contact = {};
         index_data.forEach(function(field){
             let value = previewCsvData[i][field.index];
-            // Trim whitespace from all values, treat whitespace-only as empty
-            let trimmedValue = value ? value.trim() : '';
-            contact[field.name] = trimmedValue || '';
+            if (value == null) {
+                contact[field.name] = '';
+            } else if (isAddressField(field.name)) {
+                contact[field.name] = String(value);
+            } else {
+                contact[field.name] = String(value).trim();
+            }
         });
         
         // Check if contact has complete address
@@ -857,16 +994,10 @@ function toggleSettings() {
     if (panel.style.display === "none" || !panel.style.display) {
         updateSettingsUI();
         backdrop.style.display = "block";
-        // Set display to flex and ensure proper positioning
         panel.style.display = "flex";
-        panel.style.position = "fixed";
-        panel.style.top = "50%";
-        panel.style.left = "50%";
-        panel.style.transform = "translate(-50%, -50%)";
-        panel.style.margin = "0";
+        panel.focus();
     } else {
-        backdrop.style.display = "none";
-        panel.style.display = "none";
+        closeSettingsPanel();
     }
 }
 
@@ -877,155 +1008,143 @@ function closeSettingsPanel() {
     panel.style.display = "none";
 }
 
-addEventListener("load", (event) => {
-    // Load saved settings
-    loadSettings();
-    
-    // Update settings UI when CSV type changes
-    document.querySelectorAll("#action_form input[type='radio']").forEach(radio => {
-        radio.addEventListener("change", () => {
-            updateSettingsUI();
-            saveSettings();
-        });
-    });
-    
-    let input = document.getElementById("file-input");
-    input.type = 'file';
-    input.onchange = e => {
+function showFileError(message) {
+    const errorEl = document.querySelector("#file-error");
+    errorEl.textContent = message;
+    errorEl.hidden = false;
+}
+
+function clearFileError() {
+    const errorEl = document.querySelector("#file-error");
+    errorEl.textContent = "";
+    errorEl.hidden = true;
+}
+
+function updateFileName(name) {
+    const el = document.querySelector("#file-name");
+    const title = document.querySelector(".dropzone-title");
+    if (!name) {
+        el.hidden = true;
+        el.textContent = "";
+        if (title) title.textContent = "Choose a CSV file";
+        return;
+    }
+    el.hidden = false;
+    el.textContent = name;
+    if (title) title.textContent = "Replace CSV file";
+}
+
+function handleCsvFile(file) {
+    if (!file) return;
+    const file_extension = file.name.split(".").pop().toLowerCase();
+    if (file_extension !== "csv") {
+        showFileError(`Files with extension '${file_extension}' are not supported. Only CSV files are supported.`);
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.readAsText(file, 'UTF-8');
+    reader.onload = readerEvent => {
         try {
-            // getting a hold of the file reference
-            let file = e.target.files[0]; 
-            let file_extension = file.name.split(".").pop().toLowerCase();
-            if (file_extension !== "csv"){
-                throw new Error(`Files with extention '${file_extension}' are not supported. Only CSV files are supported.`);
-            }
-
-            // setting up the reader
-            let reader = new FileReader();
-            reader.readAsText(file,'UTF-8');
-
-            // here we tell the reader what to do when it's done reading...
-            reader.onload = readerEvent => {
-                let csv_data = CSVToArray(readerEvent.target.result); // this is the content!
-                
-                // Store raw CSV data for preview
-                rawCsvData = JSON.parse(JSON.stringify(csv_data));
-                
-                let type = document.querySelector("#action_form").querySelector("input[type='radio']:checked").value;
-                
-                // Store loaded headers and file type
-                loadedHeaders = csv_data[0] || [];
-                loadedFileType = type;
-                
-                let index_data = get_index_data(csv_data, type);
-                console.log(index_data);
-
-                csv_data.shift();
-                
-                // Read checkbox values directly from DOM (not from storage) - read once and use consistently
-                let skipNoAddress = document.querySelector("#skip-no-address").checked;
-                let splitAddresses = document.querySelector("#split-addresses").checked;
-                let includeOrgWithName = document.querySelector("#include-org-with-name").checked;
-                
-                let allContacts = get_contacts(csv_data, index_data, splitAddresses);
-                
-                // Reset counters and labels container
-                contactsLoaded = 0;
-                contactsSkipped = 0;
-                loadedContacts = [];
-                document.querySelector("#labels-container").innerHTML = "";
-                document.querySelector("#labels-container").style.display = "none";
-                
-                // Debug: log the actual checkbox values being used
-                console.log("Loading contacts with options:", {
-                    skipNoAddress: skipNoAddress,
-                    splitAddresses: splitAddresses,
-                    includeOrgWithName: includeOrgWithName
-                });
-                
-                allContacts.forEach(contact => {
-                    // Loading logic:
-                    // 1. If skipNoAddress is checked: Only load contacts with complete_address
-                    // 2. If skipNoAddress is NOT checked: Load ALL contacts (regardless of address)
-                    // 3. Count labels that will be created, not just contacts (one contact can create multiple labels)
-                    if (skipNoAddress && !contact.complete_address) {
-                        contactsSkipped++;
-                    } else {
-                        loadedContacts.push(contact);
-                        // Count how many labels this contact will create (same logic as create_address_labels)
-                        let labelsCount = 0;
-                        let hasAddr1Complete = is_address_complete(contact.address_1_street, contact.address_1_city, contact.address_1_region, contact.address_1_postal_code);
-                        let hasFormattedAddr1 = contact.address_1_formatted && contact.address_1_formatted.trim();
-                        let hasAddr1Data = hasAddr1Complete || hasFormattedAddr1 || (contact.address_1_street && contact.address_1_street.trim());
-                        if (hasAddr1Data) {
-                            // Will create a label if address part is not empty (we assume it won't be empty if hasAddr1Data)
-                            labelsCount++;
-                        }
-                        let hasAddr2Complete = is_address_complete(contact.address_2_street, contact.address_2_city, contact.address_2_region, contact.address_2_postal_code);
-                        let hasFormattedAddr2 = contact.address_2_formatted && contact.address_2_formatted.trim();
-                        let hasAddr2Data = hasAddr2Complete || hasFormattedAddr2 || (contact.address_2_street && contact.address_2_street.trim());
-                        if (hasAddr2Data) {
-                            // Will create a label if address part is not empty (we assume it won't be empty if hasAddr2Data)
-                            labelsCount++;
-                        }
-                        // If no address data, will create one label with just name/org (if name/org exists)
-                        if (labelsCount === 0) {
-                            let hasName = (contact.first_name && contact.first_name.trim()) || (contact.last_name && contact.last_name.trim());
-                            let hasOrg = contact.organization_name && contact.organization_name.trim() && document.querySelector("#include-org-with-name").checked;
-                            if (hasName || hasOrg) {
-                                labelsCount = 1;
-                            }
-                        }
-                        contactsLoaded += labelsCount;
-                    }
-                });
-                
-                // Save settings
-                saveSettings();
-                
-                // Update stats display and show options
-                document.querySelector("#stats").textContent = 
-                    `Labels loaded: ${contactsLoaded}, Skipped: ${contactsSkipped}`;
-                document.querySelector("#stats").style.display = "block";
-                
-                // Show the button to display labels
-                document.querySelector("#show-labels-button").style.display = "block";
-                
-                // Show the edit header mappings button
-                const editButton = document.querySelector('button[onclick*="toggleSettings"]');
-                if (editButton) {
-                    editButton.style.display = "inline-block";
-                }
-            }
-        } catch(e) {
+            const csv_data = CSVToArray(readerEvent.target.result);
+            rawCsvData = JSON.parse(JSON.stringify(csv_data));
+            clearFileError();
+            updateFileName(file.name);
+            processFromRawCsv();
+        } catch (e) {
             console.error(e);
-            document.querySelector("#input").remove();
-            document.querySelector("#container").innerHTML = "<h1>ERROR: Could not load provided file. Please ensure it is a valid CSV file of the selected type.</h1>";
-            return;
+            showFileError("Could not load the provided file. Please ensure it is a valid CSV file of the selected type.");
+        }
+    };
+    reader.onerror = () => {
+        showFileError("Could not read the selected file.");
+    };
+}
+
+function onRenderOptionChange() {
+    saveSettings();
+    if (document.body.classList.contains("showing-labels")) {
+        reloadLabels();
+    } else if (rawCsvData) {
+        updateLabelPreview();
+    }
+}
+
+function onProcessOptionChange() {
+    saveSettings();
+    if (rawCsvData) {
+        processFromRawCsv();
+        if (document.body.classList.contains("showing-labels")) {
+            reloadLabels();
         }
     }
+}
+
+addEventListener("load", (event) => {
+    loadSettings();
+    
+    document.querySelectorAll("#action_form input[type='radio']").forEach(radio => {
+        radio.addEventListener("change", () => {
+            saveSettings();
+            if (rawCsvData) {
+                processFromRawCsv();
+            }
+            updateSettingsUI();
+        });
+    });
+
+    document.querySelector("#skip-no-address").addEventListener("change", onProcessOptionChange);
+    document.querySelector("#split-addresses").addEventListener("change", onProcessOptionChange);
+    document.querySelector("#include-org-with-name").addEventListener("change", onRenderOptionChange);
+    document.querySelector("#preserve-address-spaces").addEventListener("change", onRenderOptionChange);
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+            closeSettingsPanel();
+        }
+    });
+    
+    const input = document.getElementById("file-input");
+    input.addEventListener("change", e => {
+        const file = e.target.files && e.target.files[0];
+        handleCsvFile(file);
+    });
+
+    const dropzone = document.getElementById("dropzone");
+    ["dragenter", "dragover"].forEach(ev => {
+        dropzone.addEventListener(ev, e => {
+            e.preventDefault();
+            dropzone.classList.add("is-dragover");
+        });
+    });
+    ["dragleave", "drop"].forEach(ev => {
+        dropzone.addEventListener(ev, e => {
+            e.preventDefault();
+            dropzone.classList.remove("is-dragover");
+        });
+    });
+    dropzone.addEventListener("drop", e => {
+        const file = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (!file) return;
+        try {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+        } catch (err) {
+            // DataTransfer assignment is not required for processing.
+        }
+        handleCsvFile(file);
+    });
 });
 
 
     </script>
     <style>
-        @media print {
-            .controls {
-                display: none !important;
-            }
-            .label {
-                outline: 0px !important;
-            }
-            .reload-button {
-                display: none !important;
-            }
-            #settings-panel {
-                display: none !important;
-            }
-            #stats {
-                display: none !important;
-            }
-        }
+        /* ------------------------------------------------------------------
+           Avery 5160 / 8160 print + label geometry.
+           These measurements are for specific label stock — do not change
+           width, height, padding, float, margins, or @page rules.
+           ------------------------------------------------------------------ */
         @page
         {
             size: letter portrait;
@@ -1065,6 +1184,12 @@ addEventListener("load", (event) => {
             margin-right: 0.125in;
         }
 
+        .label,
+        .label-text {
+            font-family: sans-serif;
+            color: #000;
+        }
+
         .label-text {
             width: 100%;
             height: 100%;
@@ -1087,61 +1212,496 @@ addEventListener("load", (event) => {
             page-break-after: always;
         }
 
-        * { font-family: sans-serif; }
-        
-        #stats {
-            display: none;
-            margin: 10px 0;
-            font-weight: bold;
+        @media print {
+            .controls {
+                display: none !important;
+            }
+            .label {
+                outline: 0px !important;
+            }
+            .reload-button,
+            .label-toolbar,
+            #input,
+            #settings-panel,
+            #settings-panel-backdrop,
+            #stats {
+                display: none !important;
+            }
+            html, body {
+                background: #fff !important;
+            }
+            #labels-container {
+                display: block !important;
+            }
         }
-        
-        #show-labels-button {
-            display: none;
-            margin: 20px 0;
+
+        /* ------------------------------------------------------------------
+           Screen UI — setup, settings, and on-screen chrome only.
+           Does not change label box geometry used for printing.
+           ------------------------------------------------------------------ */
+        :root {
+            --bg: #efe8dc;
+            --bg-deep: #e4d9c8;
+            --surface: #fffcf6;
+            --ink: #1c1916;
+            --muted: #6b6458;
+            --line: #d9d0c1;
+            --teal: #165e57;
+            --teal-dark: #0e3f3b;
+            --teal-soft: #e7f3f1;
+            --danger: #8b2e2e;
+            --shadow: 0 18px 50px rgba(28, 25, 22, 0.10);
+            --radius: 18px;
+            --font: "Segoe UI", system-ui, -apple-system, sans-serif;
         }
-        
-        button[onclick*="toggleSettings"] {
+
+        body {
+            font-family: var(--font);
+            color: var(--ink);
+            background:
+                radial-gradient(1200px 500px at 10% -10%, rgba(22, 94, 87, 0.08), transparent 50%),
+                radial-gradient(900px 400px at 100% 0%, rgba(139, 46, 46, 0.05), transparent 45%),
+                var(--bg);
+            min-height: 100vh;
+        }
+
+        body.showing-labels {
+            background: #fff;
+        }
+
+        #input {
+            padding: 32px 20px 48px;
+        }
+
+        body.showing-labels #input {
             display: none;
         }
-        
-        #input #show-labels-button {
-            display: none;
+
+        .app-shell {
+            max-width: 1040px;
+            margin: 0 auto;
         }
-        
-        #show-labels-button button {
-            padding: 10px 20px;
-            font-size: 16px;
+
+        .app-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .mark {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            background: var(--teal);
+            color: #fff;
+            display: grid;
+            place-items: center;
+            flex-shrink: 0;
+            box-shadow: 0 8px 18px rgba(22, 94, 87, 0.25);
+        }
+
+        .mark svg {
+            width: 26px;
+            height: 26px;
+        }
+
+        .app-header h1 {
+            margin: 0 0 4px;
+            font-size: 1.65rem;
+            letter-spacing: -0.03em;
+            font-weight: 700;
+            line-height: 1.15;
+        }
+
+        .app-header p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.98rem;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+            gap: 20px;
+            align-items: start;
+        }
+
+        @media (max-width: 860px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 22px 24px;
+        }
+
+        .card h2 {
+            margin: 0 0 14px;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--teal);
+        }
+
+        .steps {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 12px;
+        }
+
+        .steps li {
+            display: grid;
+            grid-template-columns: 28px 1fr;
+            gap: 10px;
+            align-items: start;
+            color: var(--ink);
+            line-height: 1.45;
+            font-size: 0.95rem;
+        }
+
+        .step-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            background: var(--teal-soft);
+            color: var(--teal-dark);
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: grid;
+            place-items: center;
+        }
+
+        .steps a {
+            color: var(--teal);
+            font-weight: 600;
+        }
+
+        .kbd {
+            display: inline-block;
+            min-width: 1.15em;
+            padding: 0 6px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fff;
+            font-family: inherit;
+            font-size: 0.82em;
+            font-weight: 700;
+            line-height: 1.5;
+        }
+
+        .field-label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .segmented {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            background: var(--bg-deep);
+            padding: 4px;
+            border-radius: 12px;
+            gap: 4px;
+            margin-bottom: 18px;
+        }
+
+        .segmented input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .segmented label {
+            text-align: center;
+            padding: 10px 8px;
+            border-radius: 9px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--muted);
+        }
+
+        .segmented input:checked + label {
+            background: var(--surface);
+            color: var(--ink);
+            box-shadow: 0 2px 8px rgba(28, 25, 22, 0.08);
+        }
+
+        .segmented input:focus-visible + label {
+            outline: 2px solid var(--teal);
+            outline-offset: 2px;
+        }
+
+        .options {
+            display: grid;
+            gap: 8px;
+            margin: 0 0 18px;
+        }
+
+        .check {
+            display: grid;
+            grid-template-columns: 18px 1fr;
+            gap: 10px;
+            align-items: start;
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: #fff;
             cursor: pointer;
         }
-        
+
+        .check:hover {
+            border-color: #c9bfae;
+        }
+
+        .check input {
+            margin-top: 3px;
+            accent-color: var(--teal);
+            width: 16px;
+            height: 16px;
+        }
+
+        .check span {
+            font-size: 0.95rem;
+            line-height: 1.35;
+        }
+
+        .check small {
+            display: block;
+            color: var(--muted);
+            font-size: 0.8rem;
+            margin-top: 2px;
+            font-weight: 400;
+        }
+
+        .dropzone {
+            position: relative;
+            display: block;
+            border: 1.5px dashed #c3b9a6;
+            border-radius: 14px;
+            background: linear-gradient(180deg, #fff 0%, #f7f1e6 100%);
+            padding: 22px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+
+        .dropzone:hover,
+        .dropzone.is-dragover {
+            border-color: var(--teal);
+            background: var(--teal-soft);
+        }
+
+        .dropzone input[type="file"] {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .dropzone-title {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .dropzone-hint {
+            display: block;
+            color: var(--muted);
+            font-size: 0.88rem;
+        }
+
+        body.has-csv .dropzone {
+            border-style: solid;
+            border-color: var(--teal);
+            background: var(--teal-soft);
+        }
+
+        #file-name {
+            display: block;
+            margin-top: 10px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--teal-dark);
+        }
+
+        #file-name[hidden] {
+            display: none;
+        }
+
+        #file-error {
+            margin: 12px 0 0;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: #f8e8e6;
+            color: var(--danger);
+            font-size: 0.9rem;
+        }
+
+        #file-error[hidden] {
+            display: none;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+            align-items: center;
+        }
+
+        .btn {
+            appearance: none;
+            border: 1px solid transparent;
+            background: var(--teal);
+            color: #fff;
+            font: inherit;
+            font-weight: 600;
+            font-size: 0.95rem;
+            padding: 10px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: var(--teal-dark);
+        }
+
+        .btn-secondary {
+            background: #fff;
+            color: var(--ink);
+            border-color: var(--line);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--muted);
+            border-color: var(--line);
+        }
+
+        .btn-ghost:hover {
+            background: var(--bg);
+            color: var(--ink);
+        }
+
+        .btn-small {
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            border-radius: 8px;
+        }
+
+        .btn:focus-visible,
+        .label-btn:focus-visible,
+        select:focus-visible {
+            outline: 2px solid var(--teal);
+            outline-offset: 2px;
+        }
+
+        #stats {
+            display: none;
+            margin: 14px 0 0;
+            font-weight: 700;
+            color: var(--teal-dark);
+        }
+
+        body.has-csv #stats {
+            display: block;
+        }
+
+        #show-labels-button,
+        .edit-mappings {
+            display: none;
+        }
+
+        body.has-csv #show-labels-button,
+        body.has-csv .edit-mappings {
+            display: inline-flex;
+        }
+
         #labels-container {
             display: none;
         }
-        
-        .reload-button {
-            display: none;
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-            background: white;
-            border: 2px solid #333;
-            border-radius: 5px;
-            padding: 5px;
-            cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        
-        .reload-button:hover {
-            background: #f0f0f0;
-        }
-        
-        .reload-button img {
-            width: 24px;
-            height: 24px;
+
+        body.showing-labels #labels-container {
             display: block;
         }
-        
+
+        .label-toolbar {
+            display: none;
+            position: fixed;
+            top: auto;
+            bottom: 16px;
+            right: 16px;
+            z-index: 1000;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 8px;
+            gap: 8px;
+            align-items: center;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        body.showing-labels .label-toolbar {
+            display: flex;
+        }
+
+        #toolbar-stats {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--muted);
+            padding: 0 6px;
+            white-space: nowrap;
+        }
+
+        .label-btn {
+            appearance: none;
+            width: 22px;
+            height: 22px;
+            border: 0;
+            border-radius: 999px;
+            background: rgba(28, 25, 22, 0.78);
+            color: #fff;
+            font: 700 12px/1 var(--font);
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            padding: 0;
+            margin: 1px 2px;
+        }
+
+        .label-btn:hover {
+            background: var(--teal-dark);
+        }
+
+        .close_button:hover {
+            background: var(--danger);
+        }
+
         #settings-panel-backdrop {
             display: none;
             position: fixed;
@@ -1149,53 +1709,62 @@ addEventListener("load", (event) => {
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(28, 25, 22, 0.45);
             z-index: 1999;
-            align-items: center;
-            justify-content: center;
         }
-        
+
         #settings-panel {
             display: none;
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: white;
-            border: 2px solid #333;
-            border-radius: 10px;
-            padding: 20px;
-            max-width: 900px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 22px 22px 16px;
+            max-width: 920px;
             width: 95%;
             max-height: 85vh;
             z-index: 2000;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
             flex-direction: column;
             margin: 0;
             box-sizing: border-box;
         }
-        
+
         #settings-panel h3 {
-            margin-top: 0;
+            margin: 0 28px 8px 0;
+            font-size: 1.2rem;
+            letter-spacing: -0.02em;
         }
-        
+
+        #settings-panel > p {
+            margin: 0 0 8px;
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
+
         #label-preview-section {
             position: sticky;
             top: 0;
             z-index: 20;
-            margin: 15px 0;
-            padding: 10px;
-            background: #f5f5f5;
-            border-radius: 5px;
-            border: 1px solid #ddd;
+            margin: 12px 0;
+            padding: 12px;
+            background: var(--bg);
+            border-radius: 12px;
+            border: 1px solid var(--line);
             flex-shrink: 0;
         }
-        
+
         #label-preview-section h4 {
             margin: 0 0 10px 0;
-            font-size: 14px;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--teal);
         }
-        
+
         .label-preview-container {
             display: flex;
             flex-wrap: nowrap;
@@ -1204,150 +1773,232 @@ addEventListener("load", (event) => {
             overflow: visible;
             justify-content: center;
         }
-        
+
         .label-preview-container .label {
             flex: 0 0 2.625in;
             margin: 0;
             min-width: 2.625in;
             max-width: 2.625in;
         }
-        
+
         .label-preview-container .label-text {
             pointer-events: none;
             cursor: default;
         }
-        
+
         .label-preview-container .controls {
             display: none;
         }
-        
+
         #header-fields {
             overflow-y: auto;
             flex: 1;
             min-height: 0;
             margin: 10px 0;
             position: relative;
+            padding-bottom: 8px;
         }
-        
+
+        .settings-empty {
+            color: var(--muted);
+        }
+
         #settings-panel-buttons {
             margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid #ccc;
+            padding-top: 12px;
+            border-top: 1px solid var(--line);
             flex-shrink: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }
-        
+
         .header-field-row {
             display: grid;
-            grid-template-columns: 150px 1fr auto;
+            grid-template-columns: 160px 1fr auto;
             align-items: center;
             margin: 5px 0;
-            gap: 5px;
+            gap: 8px;
         }
-        
+
         .header-field-row select {
             min-width: 0;
-            padding: 4px;
+            padding: 7px 8px;
+            font: inherit;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
         }
-        
+
         .header-field-row.header-row {
             position: sticky;
             top: 0;
-            background: white;
+            background: var(--surface);
             z-index: 10;
-            font-weight: bold;
-            border-bottom: 2px solid #333;
-            padding-bottom: 5px;
+            font-weight: 700;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+            border-bottom: 1px solid var(--line);
+            padding-bottom: 8px;
             margin-bottom: 10px;
             padding-top: 5px;
             margin-top: 0;
         }
-        
+
         .header-field-row label {
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 0.9rem;
         }
-        
+
         .header-field-row input {
             min-width: 0;
         }
-        
+
         #settings-close {
             position: absolute;
-            top: 10px;
-            right: 10px;
+            top: 12px;
+            right: 12px;
             cursor: pointer;
             font-size: 24px;
-            font-weight: bold;
+            font-weight: 700;
             z-index: 100;
             line-height: 1;
-            padding: 5px 10px;
+            padding: 4px 10px;
+            border: 0;
+            background: transparent;
+            color: var(--ink);
+            border-radius: 8px;
         }
-        
+
         #settings-close:hover {
-            background: #f0f0f0;
-            border-radius: 3px;
-        }
-        
-        #settings-panel {
-            position: relative;
+            background: var(--bg);
         }
     </style>
 </head>
 <body>
     <div id="input">
-        <h3>Instructions</h3>
-        <ol>
-            <li>Go to <a href="https://contacts.google.com" target="_blank">Google Contacts</a>.</li>
-            <li>Select contacts to export or export all.</li>
-            <li>Click `Choose File` and select the exported contacts file to generate labels.</li>
-            <li>Click `X` to remove labels.</li>
-            <li>Click `F` to convert name to `The LASTNAME Family`</li>
-            <li>Edit as needed</li>
-            <li>Print when ready or reload the page to start over.</li>
-        </ol>
-        <hr>
-        <form id="action_form" action="#">
-            <input type="radio" id="google_csv" name="csv_type" value="google" checked>
-            <label for="google_csv">Google CSV</label><br>
-            <input type="radio" id="outlook_csv" name="csv_type" value="outlook">
-            <label for="outlook_csv">Outlook CSV</label><br>
-            <br>
-            <input type="checkbox" id="skip-no-address" name="skip-no-address">
-            <label for="skip-no-address">Skip contacts with no address</label><br>
-            <input type="checkbox" id="split-addresses" name="split-addresses">
-            <label for="split-addresses">Split multiple addresses into separate contacts</label><br>
-            <input type="checkbox" id="include-org-with-name" name="include-org-with-name">
-            <label for="include-org-with-name">Always include organization name if present</label><br>
-            <br>
-            <input type="file" id="file-input"><br>
-            <br>
-            <button type="button" onclick="toggleSettings();" style="margin-bottom: 10px;">Edit Header Mappings</button><br>
-        </form>
-        <div id="stats"></div>
-        <div id="show-labels-button">
-            <button onclick="showLabels();">Show Labels</button>
+        <div class="app-shell">
+            <header class="app-header">
+                <div class="mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <rect x="4" y="4" width="16" height="5" rx="1.2"></rect>
+                        <rect x="4" y="10.5" width="16" height="5" rx="1.2"></rect>
+                        <rect x="4" y="17" width="16" height="3" rx="1"></rect>
+                    </svg>
+                </div>
+                <div>
+                    <h1>Avery 5160 / 8160 Label Maker</h1>
+                    <p>Turn a Google or Outlook contacts CSV into printable address labels.</p>
+                </div>
+            </header>
+
+            <div class="layout">
+                <section class="card">
+                    <h2>How it works</h2>
+                    <ol class="steps">
+                        <li>
+                            <span class="step-num">1</span>
+                            <span>Export contacts as CSV from <a href="https://contacts.google.com" target="_blank" rel="noopener">Google Contacts</a> or Outlook.</span>
+                        </li>
+                        <li>
+                            <span class="step-num">2</span>
+                            <span>Choose the matching CSV type and any options you need.</span>
+                        </li>
+                        <li>
+                            <span class="step-num">3</span>
+                            <span>Load the exported file to generate labels.</span>
+                        </li>
+                        <li>
+                            <span class="step-num">4</span>
+                            <span>Click <span class="kbd">×</span> to remove a label, or <span class="kbd">F</span> to change the name to <em>The LASTNAME Family</em>.</span>
+                        </li>
+                        <li>
+                            <span class="step-num">5</span>
+                            <span>Edit text as needed, then print. Use letter paper with Avery 5160 / 8160 label sheets.</span>
+                        </li>
+                    </ol>
+                </section>
+
+                <section class="card">
+                    <h2>Load contacts</h2>
+                    <form id="action_form" action="#" onsubmit="return false;">
+                        <span class="field-label">CSV type</span>
+                        <div class="segmented" role="radiogroup" aria-label="CSV type">
+                            <input type="radio" id="google_csv" name="csv_type" value="google" checked>
+                            <label for="google_csv">Google CSV</label>
+                            <input type="radio" id="outlook_csv" name="csv_type" value="outlook">
+                            <label for="outlook_csv">Outlook CSV</label>
+                        </div>
+
+                        <span class="field-label">Options</span>
+                        <div class="options">
+                            <label class="check" for="skip-no-address">
+                                <input type="checkbox" id="skip-no-address" name="skip-no-address">
+                                <span>Skip contacts with no address</span>
+                            </label>
+                            <label class="check" for="split-addresses">
+                                <input type="checkbox" id="split-addresses" name="split-addresses">
+                                <span>Split multiple addresses into separate contacts</span>
+                            </label>
+                            <label class="check" for="include-org-with-name">
+                                <input type="checkbox" id="include-org-with-name" name="include-org-with-name">
+                                <span>Always include organization name if present</span>
+                            </label>
+                            <label class="check" for="preserve-address-spaces">
+                                <input type="checkbox" id="preserve-address-spaces" name="preserve-address-spaces">
+                                <span>
+                                    Don't strip spaces from address fields
+                                    <small>Keeps original leading and trailing spaces in street, city, state, ZIP, and formatted address values.</small>
+                                </span>
+                            </label>
+                        </div>
+
+                        <label class="dropzone" id="dropzone" for="file-input">
+                            <input type="file" id="file-input" accept=".csv,text/csv">
+                            <span class="dropzone-title">Choose a CSV file</span>
+                            <span class="dropzone-hint">or drag and drop it here</span>
+                            <span id="file-name" hidden></span>
+                        </label>
+                        <div id="file-error" hidden></div>
+
+                        <div id="stats"></div>
+                        <div class="actions">
+                            <button type="button" class="btn btn-secondary edit-mappings" onclick="toggleSettings();">Edit header mappings</button>
+                            <div id="show-labels-button">
+                                <button type="button" class="btn" onclick="showLabels();">Show labels</button>
+                            </div>
+                        </div>
+                    </form>
+                </section>
+            </div>
         </div>
     </div>
     <div id="settings-panel-backdrop" onclick="closeSettingsPanel();"></div>
-    <div id="settings-panel">
-        <span id="settings-close" onclick="closeSettingsPanel();">×</span>
-        <h3>Edit Header Mappings</h3>
-        <p>Configure which CSV headers map to which contact fields. Select headers from the dropdown based on your loaded CSV file. Changes are saved automatically.</p>
+    <div id="settings-panel" role="dialog" aria-labelledby="settings-title" tabindex="-1">
+        <button type="button" id="settings-close" onclick="closeSettingsPanel();" aria-label="Close settings">×</button>
+        <h3 id="settings-title">Edit header mappings</h3>
+        <p>Choose which CSV columns map to each contact field. Changes are saved automatically.</p>
         <div id="label-preview-section">
-            <h4>Label Preview</h4>
+            <h4>Label preview</h4>
             <div id="label-preview-container" class="label-preview-container"></div>
         </div>
         <div id="header-fields"></div>
         <div id="settings-panel-buttons">
-            <button onclick="addHeaderField();">Add Field</button>
-            <button onclick="saveHeaderSettings(); closeSettingsPanel();" style="margin-left: 10px;">Save & Close</button>
-            <button onclick="resetSettings();" style="margin-left: 10px;">Reset to Defaults</button>
+            <button type="button" class="btn btn-secondary" onclick="addHeaderField();">Add field</button>
+            <button type="button" class="btn" onclick="saveHeaderSettings(); closeSettingsPanel();">Save &amp; close</button>
+            <button type="button" class="btn btn-ghost" onclick="resetSettings();">Reset to defaults</button>
         </div>
+    </div>
+    <div class="label-toolbar" role="toolbar" aria-label="Label actions">
+        <button type="button" class="btn btn-secondary btn-small" onclick="backToSetup();">Back to setup</button>
+        <span id="toolbar-stats"></span>
+        <button type="button" class="btn btn-secondary btn-small reload-button" onclick="reloadLabels();" title="Reload all labels">Reload</button>
+        <button type="button" class="btn btn-small" onclick="window.print();">Print</button>
     </div>
     <div id="container">
         <div id="labels-container"></div>
-    </div>
-    <div class="reload-button" onclick="reloadLabels();" title="Reload All Labels">
-        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAIRlWElmTU0AKgAAAAgABQESAAMAAAABAAEAAAEaAAUAAAABAAAASgEbAAUAAAABAAAAUgEoAAMAAAABAAIAAIdpAAQAAAABAAAAWgAAAAAAAABIAAAAAQAAAEgAAAABAAOgAQADAAAAAQABAACgAgAEAAAAAQAAACCgAwAEAAAAAQAAACAAAAAAX7wP8AAAAAlwSFlzAAALEwAACxMBAJqcGAAAAVlpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IlhNUCBDb3JlIDYuMC4wIj4KICAgPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4KICAgICAgPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIKICAgICAgICAgICAgeG1sbnM6dGlmZj0iaHR0cDovL25zLmFkb2JlLmNvbS90aWZmLzEuMC8iPgogICAgICAgICA8dGlmZjpPcmllbnRhdGlvbj4xPC90aWZmOk9yaWVudGF0aW9uPgogICAgICA8L3JkZjpEZXNjcmlwdGlvbj4KICAgPC9yZGY6UkRGPgo8L3g6eG1wbWV0YT4KGV7hBwAAA75JREFUWAmtl0uPDFEUx4dhhLAQQiKspM3GCt/AsECCiIWtpBeEjQ8yH8CuLfgIEonVLBErCQsZpIfEe8T7Nf6/W/dfTpeqruqJk/yrzj33vO+juqenutMaqU5nYLXCI9Ba8cyjFwmZdSOfdKrK0TDy6zT4GQXiZ4SNAj4+C9+FSNj8zkAXQgd9J4RsLFUrmpP2vLAgLAqvM57ojYw5dCKd0uC58EI4mSfw20pUYOqLeSiQeRc8kt55gWUZBhsSsd+x3V8vRWhWuCs46A/xX4SvAu21HB4Zc+hYfl/8smDdt+K3CVBjAg5+TEq/BJyxdt8yb+fMvRfeCdbzHPoxEc+/kXyrANUm4PYQPDpjAzKmyoFwWugJVAPgzwrXhE8CulRNYN6xA40JeGPQdmdMJU7khvjdQhsdkMJtATv76ZSAW+I1jy2/FKKyRHSKDYaNu3ZG/CthmOHE3Q3ejUtgJ30poUjlbruDE5igkZw055xjFoPG9rsTtZvQTnDso+bqaTtE8KiXhEFWl0BMxnztMfTaz8khit69bDivebVyTZVkey4ZAlAlreYdeea4lCDbpIHbP68RCXCt8h4IENW3kbuDL04FOz0CmeNYV6KCXN2ChgSmct4cNciGxaj5OVJVg1qjL9ZwUSCwz28vO3GCeTj2RXVNiMHLZC3kq7Ylu8bBssD6QSTVlZp0KYJTtUFAh1NGnJVJqpP+qohq6Sob8JnwNPMkUnbify2BfI4QVUJ0ekkgKOBEpO7TAUBLhgIEj2w/AxH8asm2B+Vgl8ARh6h8EwwKVrqDQES7IJ9ZV1FIJ3va97lsxo0IPRA+CGne63BYAtoz6UUkk1py8J2a/Sjg2zfshWyRliFW6KvYd0HbVZz91L58gV3XbAz+UuN44pJxykRcPyuzD7p8jJJx5UHlDn5ZPMHx5eqviIccsxjp6U6wF2LG8P4iooxzjAmEDYBH5sBip2gztoCCeN8TTI7ncXkmZyXx59OGGLMc/jiVRjXMDskGQjU4vnpZ3/suD/++3JauP8m2y5QPzV7hhHBV8IaLbSeZIwIUu1RIKk8rkIQ7wfp5DV0Zc/woBd4vnov6zB0VIPsuRmOeVmQ5vCdwzhFt+llOUP9DciKs+T4Bss9i1OHp5UC1L/iI2vm492PpX8QwU/RlWXr/sxNHZosr079omeKyOi4cEvYImwWIn+JLAhXfFG4JLBHEhjOfBPHRloB1qYC1jDSjAZ9xiGVhl0eqs4nzie+aAMro+uzTFX8zmIOYAyxN7JqGzfQHNLxMegi8zcUAAAAASUVORK5CYII=" alt="Reload">
     </div>
 </body>
 </html>
