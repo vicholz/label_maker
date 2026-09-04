@@ -1444,6 +1444,44 @@ addEventListener("load", (event) => {
             outline-offset: 2px;
         }
 
+        .template-callout {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin: 0 0 18px;
+            padding: 12px 14px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: var(--teal-soft);
+        }
+
+        .template-callout strong {
+            display: block;
+            font-size: 0.95rem;
+            margin-bottom: 4px;
+        }
+
+        .template-callout p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .template-callout .btn {
+            flex-shrink: 0;
+            text-decoration: none;
+        }
+
+        @media (max-width: 560px) {
+            .template-callout {
+                flex-direction: column;
+                align-items: stretch;
+                text-align: left;
+            }
+        }
+
         .options {
             display: grid;
             gap: 8px;
@@ -1890,7 +1928,7 @@ addEventListener("load", (event) => {
                 </div>
                 <div>
                     <h1>Avery 5160 / 8160 Label Maker</h1>
-                    <p>Turn a Google or Outlook contacts CSV into printable address labels.</p>
+                    <p>Turn a Google, Outlook, or spreadsheet CSV into printable address labels.</p>
                 </div>
             </header>
 
@@ -1900,15 +1938,15 @@ addEventListener("load", (event) => {
                     <ol class="steps">
                         <li>
                             <span class="step-num">1</span>
-                            <span>Export contacts as CSV from <a href="https://contacts.google.com" target="_blank" rel="noopener">Google Contacts</a> or Outlook.</span>
+                            <span>Export contacts as CSV from <a href="https://contacts.google.com" target="_blank" rel="noopener">Google Contacts</a> or Outlook, or <a href="template.csv" download="template.csv">download the spreadsheet template</a> and fill it in Google Sheets or Excel.</span>
                         </li>
                         <li>
                             <span class="step-num">2</span>
-                            <span>Choose the matching CSV type and any options you need.</span>
+                            <span>Choose the matching CSV type and any options you need. Spreadsheet files from the template use <strong>Google CSV</strong>.</span>
                         </li>
                         <li>
                             <span class="step-num">3</span>
-                            <span>Load the exported file to generate labels.</span>
+                            <span>Load the CSV to generate labels. If you edited the template in Sheets or Excel, save or download it as CSV first.</span>
                         </li>
                         <li>
                             <span class="step-num">4</span>
@@ -1930,6 +1968,14 @@ addEventListener("load", (event) => {
                             <label for="google_csv">Google CSV</label>
                             <input type="radio" id="outlook_csv" name="csv_type" value="outlook">
                             <label for="outlook_csv">Outlook CSV</label>
+                        </div>
+
+                        <div class="template-callout">
+                            <div>
+                                <strong>Using Google Sheets or Excel?</strong>
+                                <p>Download the CSV template, fill in names and addresses, then save as CSV and load it here with Google CSV selected.</p>
+                            </div>
+                            <a class="btn btn-secondary" href="template.csv" download="template.csv">Download template</a>
                         </div>
 
                         <span class="field-label">Options</span>
