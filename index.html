@@ -1049,6 +1049,28 @@ function closeSettingsPanel() {
     panel.style.display = "none";
 }
 
+function openPrintSetupDialog() {
+    const dialog = document.querySelector("#print-setup-dialog");
+    const backdrop = document.querySelector("#print-setup-backdrop");
+    if (!dialog || !backdrop) return;
+    backdrop.hidden = false;
+    dialog.hidden = false;
+    const confirmBtn = document.querySelector("#print-setup-confirm");
+    if (confirmBtn) confirmBtn.focus();
+}
+
+function closePrintSetupDialog() {
+    const dialog = document.querySelector("#print-setup-dialog");
+    const backdrop = document.querySelector("#print-setup-backdrop");
+    if (dialog) dialog.hidden = true;
+    if (backdrop) backdrop.hidden = true;
+}
+
+function confirmPrint() {
+    closePrintSetupDialog();
+    setTimeout(() => window.print(), 0);
+}
+
 function showFileError(message) {
     const errorEl = document.querySelector("#file-error");
     errorEl.textContent = message;
@@ -1142,6 +1164,7 @@ addEventListener("load", (event) => {
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
             closeSettingsPanel();
+            closePrintSetupDialog();
             const filterInput = document.querySelector("#label-filter");
             if (document.body.classList.contains("showing-labels") && filterInput && document.activeElement === filterInput && filterInput.value) {
                 clearLabelFilter();
@@ -1306,6 +1329,8 @@ addEventListener("load", (event) => {
             #input,
             #settings-panel,
             #settings-panel-backdrop,
+            #print-setup-dialog,
+            #print-setup-backdrop,
             #stats {
                 display: none !important;
             }
@@ -1557,6 +1582,36 @@ addEventListener("load", (event) => {
         .template-callout .btn {
             flex-shrink: 0;
             text-decoration: none;
+        }
+
+        .print-setup {
+            margin-top: 16px;
+            padding: 12px 14px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: var(--teal-soft);
+        }
+
+        .print-setup strong {
+            display: block;
+            font-size: 0.95rem;
+            margin-bottom: 8px;
+        }
+
+        .print-setup ul {
+            margin: 0;
+            padding: 0 0 0 1.15em;
+            display: grid;
+            gap: 6px;
+            color: var(--ink);
+            font-size: 0.88rem;
+            line-height: 1.4;
+        }
+
+        .print-setup li strong {
+            display: inline;
+            font-size: inherit;
+            margin: 0;
         }
 
         @media (max-width: 560px) {
@@ -2060,6 +2115,76 @@ addEventListener("load", (event) => {
         #settings-close:hover {
             background: var(--bg);
         }
+
+        #print-setup-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(28, 25, 22, 0.45);
+            z-index: 2999;
+        }
+
+        #print-setup-backdrop:not([hidden]) {
+            display: block;
+        }
+
+        #print-setup-dialog {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 22px 22px 16px;
+            max-width: 440px;
+            width: 95%;
+            z-index: 3000;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+            flex-direction: column;
+            margin: 0;
+            box-sizing: border-box;
+        }
+
+        #print-setup-dialog:not([hidden]) {
+            display: flex;
+        }
+
+        #print-setup-dialog h3 {
+            margin: 0 0 8px;
+            font-size: 1.2rem;
+            letter-spacing: -0.02em;
+        }
+
+        #print-setup-dialog > p {
+            margin: 0 0 10px;
+            color: var(--muted);
+            font-size: 0.92rem;
+            line-height: 1.45;
+        }
+
+        #print-setup-dialog ul {
+            margin: 0 0 10px;
+            padding: 0 0 0 1.15em;
+            display: grid;
+            gap: 6px;
+            font-size: 0.92rem;
+            line-height: 1.4;
+        }
+
+        .print-setup-actions {
+            display: flex;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+            padding-top: 12px;
+            border-top: 1px solid var(--line);
+        }
     </style>
 </head>
 <body>
@@ -2101,9 +2226,17 @@ addEventListener("load", (event) => {
                         </li>
                         <li>
                             <span class="step-num">5</span>
-                            <span>Edit text as needed, then print. Use letter paper with Avery 5160 / 8160 label sheets.</span>
+                            <span>Edit text as needed, then print on letter-size Avery 5160 / 8160 sheets. Use the printer settings below so the labels line up.</span>
                         </li>
                     </ol>
+                    <div class="print-setup">
+                        <strong>Printer setup</strong>
+                        <ul>
+                            <li>Set scale to <strong>100%</strong> (Actual size). Do not use Fit to page or Fit to printable area.</li>
+                            <li>Set margins to <strong>Default</strong> and turn <strong>headers and footers off</strong>.</li>
+                            <li>Print a test page on plain paper first, then load the label stock the way your printer tray indicates.</li>
+                        </ul>
+                    </div>
                 </section>
 
                 <section class="card">
@@ -2192,10 +2325,25 @@ addEventListener("load", (event) => {
         </div>
         <span id="toolbar-stats"></span>
         <button type="button" class="btn btn-secondary btn-small reload-button" onclick="reloadLabels();" title="Reload all labels">Reload</button>
-        <button type="button" class="btn btn-small" onclick="window.print();">Print</button>
+        <button type="button" class="btn btn-small" onclick="openPrintSetupDialog();">Print</button>
     </div>
     <div id="container">
         <div id="labels-container"></div>
+    </div>
+    <div id="print-setup-backdrop" hidden onclick="closePrintSetupDialog();"></div>
+    <div id="print-setup-dialog" role="dialog" aria-modal="true" aria-labelledby="print-setup-title" hidden>
+        <h3 id="print-setup-title">Before you print</h3>
+        <p>Your browser's print dialog is next. Check these settings so the labels stay on the sheet:</p>
+        <ul>
+            <li>Scale: <strong>100%</strong> (Actual size), not Fit to page</li>
+            <li>Margins: <strong>Default</strong></li>
+            <li>Headers and footers: <strong>off</strong></li>
+        </ul>
+        <p>Print a test on plain paper first, then load Avery 5160 / 8160 stock.</p>
+        <div class="print-setup-actions">
+            <button type="button" class="btn btn-secondary" onclick="closePrintSetupDialog();">Cancel</button>
+            <button type="button" class="btn" id="print-setup-confirm" onclick="confirmPrint();">Continue to print</button>
+        </div>
     </div>
 </body>
 </html>
