@@ -1172,70 +1172,37 @@ function onProcessOptionChange() {
 }
 
 const APP_REPO = "vicholz/label_maker";
-const APP_VERSION_FALLBACK = {
-    version: "20260905.222905",
-    sha: "793b0debba3cc709e5c2c8fa814a6606da3bb732"
-};
+const APP_VERSION_FALLBACK_SHA = "1d6e3a6ea4a18ec246e2d334050b1aea1bf8ef32";
 
-function formatVersionStamp(date) {
-    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
-    const parts = new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/Los_Angeles",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hourCycle: "h23"
-    }).formatToParts(date);
-    const get = type => parts.find(part => part.type === type)?.value;
-    const year = get("year");
-    const month = get("month");
-    const day = get("day");
-    const hour = get("hour");
-    const minute = get("minute");
-    const second = get("second");
-    if (!year || !month || !day || !hour || !minute || !second) return null;
-    return `${year}${month}${day}.${hour}${minute}${second}`;
-}
-
-function renderAppVersion(version, sha) {
+function renderAppVersion(sha) {
     const el = document.querySelector("#app-version");
-    if (!el || !version) return;
+    if (!el || !sha) return;
     el.replaceChildren();
     el.append("Version ");
-    if (sha) {
-        const a = document.createElement("a");
-        a.href = `https://github.com/${APP_REPO}/commit/${sha}`;
-        a.target = "_blank";
-        a.rel = "noopener";
-        a.textContent = version;
-        a.title = "View the diff for this version";
-        el.appendChild(a);
-    } else {
-        el.append(version);
-    }
+    const a = document.createElement("a");
+    a.href = `https://github.com/${APP_REPO}/commit/${sha}`;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.textContent = sha;
+    a.title = "View the diff for this version";
+    el.appendChild(a);
     el.hidden = false;
 }
 
 function loadAppVersion() {
-    renderAppVersion(APP_VERSION_FALLBACK.version, APP_VERSION_FALLBACK.sha);
+    renderAppVersion(APP_VERSION_FALLBACK_SHA);
     fetch(`https://api.github.com/repos/${APP_REPO}/commits/main`)
         .then(res => {
             if (!res.ok) throw new Error(res.status);
             return res.json();
         })
         .then(commit => {
-            const iso = commit.commit?.committer?.date || commit.commit?.author?.date;
-            const version = formatVersionStamp(iso ? new Date(iso) : null);
-            const sha = commit.sha;
-            if (version) {
-                renderAppVersion(version, sha);
+            if (commit.sha) {
+                renderAppVersion(commit.sha);
             }
         })
         .catch(() => {
-            // Keep the baked-in version; link still goes to the last known commit.
+            // Keep the baked-in commit hash; link still goes to the last known commit.
         });
 }
 
@@ -1608,6 +1575,7 @@ addEventListener("load", (event) => {
             font-size: 0.75rem;
             color: var(--muted);
             letter-spacing: 0.02em;
+            overflow-wrap: anywhere;
         }
 
         .app-header .app-version {
@@ -1616,6 +1584,7 @@ addEventListener("load", (event) => {
 
         .app-version a {
             color: inherit;
+            font-family: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
             text-underline-offset: 2px;
         }
 
