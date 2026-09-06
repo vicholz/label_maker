@@ -1172,7 +1172,7 @@ function onProcessOptionChange() {
 }
 
 const APP_REPO = "vicholz/label_maker";
-const APP_VERSION_FALLBACK_SHA = "1d6e3a6ea4a18ec246e2d334050b1aea1bf8ef32";
+const APP_VERSION_FALLBACK_SHA = "0924ceabb4161039e30cee0d0f44486aa00b6d28";
 
 function renderAppVersion(sha) {
     const el = document.querySelector("#app-version");
@@ -1183,7 +1183,7 @@ function renderAppVersion(sha) {
     a.href = `https://github.com/${APP_REPO}/commit/${sha}`;
     a.target = "_blank";
     a.rel = "noopener";
-    a.textContent = sha;
+    a.textContent = sha.slice(0, 7);
     a.title = "View the diff for this version";
     el.appendChild(a);
     el.hidden = false;
