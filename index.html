@@ -1171,8 +1171,77 @@ function onProcessOptionChange() {
     }
 }
 
+const APP_REPO = "vicholz/label_maker";
+const APP_VERSION_FALLBACK = {
+    version: "20260905.222905",
+    sha: "793b0debba3cc709e5c2c8fa814a6606da3bb732"
+};
+
+function formatVersionStamp(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+    const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/Los_Angeles",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23"
+    }).formatToParts(date);
+    const get = type => parts.find(part => part.type === type)?.value;
+    const year = get("year");
+    const month = get("month");
+    const day = get("day");
+    const hour = get("hour");
+    const minute = get("minute");
+    const second = get("second");
+    if (!year || !month || !day || !hour || !minute || !second) return null;
+    return `${year}${month}${day}.${hour}${minute}${second}`;
+}
+
+function renderAppVersion(version, sha) {
+    const el = document.querySelector("#app-version");
+    if (!el || !version) return;
+    el.replaceChildren();
+    el.append("Version ");
+    if (sha) {
+        const a = document.createElement("a");
+        a.href = `https://github.com/${APP_REPO}/commit/${sha}`;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = version;
+        a.title = "View the diff for this version";
+        el.appendChild(a);
+    } else {
+        el.append(version);
+    }
+    el.hidden = false;
+}
+
+function loadAppVersion() {
+    renderAppVersion(APP_VERSION_FALLBACK.version, APP_VERSION_FALLBACK.sha);
+    fetch(`https://api.github.com/repos/${APP_REPO}/commits/main`)
+        .then(res => {
+            if (!res.ok) throw new Error(res.status);
+            return res.json();
+        })
+        .then(commit => {
+            const iso = commit.commit?.committer?.date || commit.commit?.author?.date;
+            const version = formatVersionStamp(iso ? new Date(iso) : null);
+            const sha = commit.sha;
+            if (version) {
+                renderAppVersion(version, sha);
+            }
+        })
+        .catch(() => {
+            // Keep the baked-in version; link still goes to the last known commit.
+        });
+}
+
 addEventListener("load", (event) => {
     loadSettings();
+    loadAppVersion();
     
     document.querySelectorAll("#action_form input[type='radio']").forEach(radio => {
         radio.addEventListener("change", () => {
@@ -1532,6 +1601,26 @@ addEventListener("load", (event) => {
             margin: 0;
             color: var(--muted);
             font-size: 0.98rem;
+        }
+
+        .app-version {
+            margin: 8px 0 0;
+            font-size: 0.75rem;
+            color: var(--muted);
+            letter-spacing: 0.02em;
+        }
+
+        .app-header .app-version {
+            font-size: 0.75rem;
+        }
+
+        .app-version a {
+            color: inherit;
+            text-underline-offset: 2px;
+        }
+
+        .app-version a:hover {
+            color: var(--teal);
         }
 
         .layout {
@@ -2301,6 +2390,7 @@ addEventListener("load", (event) => {
                 <div>
                     <h1>Avery 5160 / 8160 Label Maker</h1>
                     <p>Turn a Google, Outlook, or spreadsheet CSV into printable address labels.</p>
+                    <p class="app-version" id="app-version" hidden></p>
                 </div>
             </header>
 
