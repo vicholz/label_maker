@@ -740,6 +740,8 @@ function updateFilterClearButton() {
     clear.hidden = !input.value;
 }
 
+const LABELS_PER_SHEET = 30;
+
 function applyLabelFilter() {
     const terms = getFilterTerms();
     const labels = document.querySelectorAll("#labels-container .label");
@@ -748,8 +750,34 @@ function applyLabelFilter() {
         const matches = terms.length === 0 || terms.some(term => text.includes(term));
         label.classList.toggle("is-filtered-out", !matches);
     });
+    paginateLabels();
     updateFilterClearButton();
     updateStatsDisplay();
+}
+
+function paginateLabels() {
+    const container = document.querySelector("#labels-container");
+    if (!container) return;
+
+    const labels = Array.from(container.querySelectorAll(".label"));
+    labels.forEach(label => container.appendChild(label));
+    container.querySelectorAll(".label-sheet").forEach(sheet => sheet.remove());
+
+    const visible = labels.filter(label => !label.classList.contains("is-filtered-out"));
+    for (let i = 0; i < visible.length; i += LABELS_PER_SHEET) {
+        const sheet = document.createElement("div");
+        const pageNum = i / LABELS_PER_SHEET + 1;
+        sheet.className = "label-sheet";
+        sheet.dataset.page = String(pageNum);
+        sheet.setAttribute("role", "region");
+        sheet.setAttribute("aria-label", `Page ${pageNum}`);
+        visible.slice(i, i + LABELS_PER_SHEET).forEach(label => sheet.appendChild(label));
+        container.appendChild(sheet);
+    }
+
+    labels
+        .filter(label => label.classList.contains("is-filtered-out"))
+        .forEach(label => container.appendChild(label));
 }
 
 function clearLabelFilter() {
@@ -1340,8 +1368,34 @@ addEventListener("load", (event) => {
             html, body {
                 background: #fff !important;
             }
+            #container {
+                display: block !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
             #labels-container {
                 display: grid !important;
+                width: 8.125in !important;
+                max-width: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                gap: 0 !important;
+                column-gap: 0.125in !important;
+                row-gap: 0 !important;
+            }
+            .label-sheet {
+                display: contents !important;
+                box-shadow: none !important;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                width: auto !important;
+                height: auto !important;
+                background: transparent !important;
+            }
+            .label-sheet::after {
+                content: none !important;
+                display: none !important;
             }
         }
 
@@ -1375,8 +1429,58 @@ addEventListener("load", (event) => {
             min-height: 100vh;
         }
 
-        body.showing-labels {
-            background: #fff;
+        @media screen {
+            body.showing-labels {
+                background: var(--bg);
+                overflow-x: auto;
+            }
+
+            body.showing-labels #container {
+                display: flex;
+                justify-content: safe center;
+                padding: 28px 16px 96px;
+                min-height: 100vh;
+                box-sizing: border-box;
+            }
+
+            body.showing-labels #labels-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 28px;
+                width: max-content;
+                max-width: none;
+            }
+
+            .label-sheet {
+                display: grid;
+                grid-template-columns: repeat(3, 2.625in);
+                column-gap: 0.125in;
+                row-gap: 0;
+                align-content: start;
+                justify-content: start;
+                width: 8.5in;
+                height: 11in;
+                box-sizing: border-box;
+                padding: 0.5in 0.1925in 0.5in 0.1825in;
+                background: #fff;
+                border: 1px solid #c9bfae;
+                box-shadow: 0 12px 36px rgba(28, 25, 22, 0.12);
+                position: relative;
+                flex-shrink: 0;
+            }
+
+            .label-sheet::after {
+                content: "Page " attr(data-page);
+                position: absolute;
+                right: 0.2in;
+                bottom: 0.18in;
+                font-size: 0.72rem;
+                font-weight: 600;
+                color: var(--muted);
+                letter-spacing: 0.04em;
+                pointer-events: none;
+            }
         }
 
         #input {
@@ -1822,10 +1926,6 @@ addEventListener("load", (event) => {
 
         #labels-container {
             display: none;
-        }
-
-        body.showing-labels #labels-container {
-            display: grid;
         }
 
         .label-toolbar {
