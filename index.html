@@ -803,33 +803,90 @@ function updateStatsDisplay() {
     }
 }
 
-function renderLabels() {
+function yieldToPaint() {
+    return new Promise(resolve => {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(resolve);
+        });
+    });
+}
+
+function showLabelsLoading() {
+    const el = document.querySelector("#labels-loading");
+    if (!el) return;
+    el.hidden = false;
+    el.setAttribute("aria-busy", "true");
+}
+
+function hideLabelsLoading() {
+    const el = document.querySelector("#labels-loading");
+    if (!el) return;
+    el.hidden = true;
+    el.setAttribute("aria-busy", "false");
+}
+
+async function withLabelsLoading(work) {
+    if (document.body.classList.contains("creating-labels")) {
+        return;
+    }
+    document.body.classList.add("creating-labels");
+    showLabelsLoading();
+    const showButton = document.querySelector("#show-labels-button button");
+    if (showButton) showButton.disabled = true;
+    await yieldToPaint();
+    try {
+        await work();
+    } finally {
+        hideLabelsLoading();
+        document.body.classList.remove("creating-labels");
+        if (showButton) showButton.disabled = false;
+    }
+}
+
+async function renderLabels() {
     const container = document.querySelector("#labels-container");
     container.innerHTML = loadedContacts.map(contact => create_address_labels(contact)).join("");
-    container.querySelectorAll(".label-text").forEach(e => {
-        resizeFontToFit(e);
-    });
+    const texts = container.querySelectorAll(".label-text");
+    const chunkSize = 20;
+    for (let i = 0; i < texts.length; i += chunkSize) {
+        const end = Math.min(i + chunkSize, texts.length);
+        for (let j = i; j < end; j++) {
+            resizeFontToFit(texts[j]);
+        }
+        if (end < texts.length) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
     applyLabelFilter();
 }
 
 function showLabels() {
-    if (rawCsvData) {
-        processFromRawCsv();
-    }
-    if (loadedContacts.length === 0) {
+    if (!rawCsvData && loadedContacts.length === 0) {
         alert("No contacts loaded. Please load a CSV file first.");
         return;
     }
-    
-    document.body.classList.add("showing-labels");
-    renderLabels();
+
+    withLabelsLoading(async () => {
+        if (rawCsvData) {
+            processFromRawCsv();
+        }
+        if (loadedContacts.length === 0) {
+            alert("No contacts loaded. Please load a CSV file first.");
+            return;
+        }
+
+        document.body.classList.add("showing-labels");
+        await renderLabels();
+    });
 }
 
 function reloadLabels() {
     if (loadedContacts.length === 0) {
         return;
     }
-    renderLabels();
+    withLabelsLoading(async () => {
+        await renderLabels();
+    });
 }
 
 function backToSetup() {
@@ -1391,6 +1448,7 @@ addEventListener("load", (event) => {
             #settings-panel-backdrop,
             #print-setup-dialog,
             #print-setup-backdrop,
+            #labels-loading,
             #stats {
                 display: none !important;
             }
@@ -1950,6 +2008,11 @@ addEventListener("load", (event) => {
             border-radius: 8px;
         }
 
+        .btn:disabled {
+            opacity: 0.65;
+            cursor: wait;
+        }
+
         .btn:focus-visible,
         .label-btn:focus-visible,
         select:focus-visible {
@@ -2339,6 +2402,69 @@ addEventListener("load", (event) => {
             padding-top: 12px;
             border-top: 1px solid var(--line);
         }
+
+        #labels-loading {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 4000;
+            align-items: center;
+            justify-content: center;
+            background:
+                radial-gradient(1200px 500px at 10% -10%, rgba(22, 94, 87, 0.08), transparent 50%),
+                radial-gradient(900px 400px at 100% 0%, rgba(139, 46, 46, 0.05), transparent 45%),
+                var(--bg);
+        }
+
+        #labels-loading:not([hidden]) {
+            display: flex;
+        }
+
+        body.creating-labels {
+            overflow: hidden;
+        }
+
+        body.creating-labels .label-toolbar {
+            display: none;
+        }
+
+        .labels-loading-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            text-align: center;
+        }
+
+        .labels-loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--line);
+            border-top-color: var(--teal);
+            border-radius: 50%;
+            animation: labels-spin 0.75s linear infinite;
+        }
+
+        .labels-loading-panel p {
+            margin: 0;
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--ink);
+        }
+
+        @keyframes labels-spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .labels-loading-spinner {
+                animation: none;
+                border-top-color: var(--teal);
+            }
+        }
     </style>
 </head>
 <body>
@@ -2498,6 +2624,12 @@ addEventListener("load", (event) => {
         <div class="print-setup-actions">
             <button type="button" class="btn btn-secondary" onclick="closePrintSetupDialog();">Cancel</button>
             <button type="button" class="btn" id="print-setup-confirm" onclick="confirmPrint();">Continue to print</button>
+        </div>
+    </div>
+    <div id="labels-loading" hidden role="status" aria-live="polite" aria-busy="false">
+        <div class="labels-loading-panel">
+            <div class="labels-loading-spinner" aria-hidden="true"></div>
+            <p>Creating Labels...</p>
         </div>
     </div>
 </body>
