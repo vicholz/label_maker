@@ -1203,8 +1203,17 @@ addEventListener("load", (event) => {
     <style>
         /* ------------------------------------------------------------------
            Avery 5160 / 8160 print + label geometry.
-           These measurements are for specific label stock — do not change
-           width, height, padding, float, margins, or @page rules.
+           Label size is 2.625in × 1in, 3 columns, 0.125in gutters between
+           columns only, 0.5in top/bottom page margins. Those must match
+           the physical stock — do not change them to "look nicer".
+
+           The sheet is a 3-column grid (not float). Float + margin-right
+           on every label, including column 3, needed 8.25in in an 8.26in
+           content box (~1px of slack). Printer min-margins and inch-to-px
+           rounding then wrapped column 3 onto the next row, which with
+           1in rows looks like those labels dropped to the next page.
+           Grid keeps column 3 in place; extra width overflows right
+           (into padding / unprintable area) instead of wrapping.
            ------------------------------------------------------------------ */
         @page
         {
@@ -1230,19 +1239,28 @@ addEventListener("load", (event) => {
             margin: 0;
         }
 
+        /* 2.625×3 + 0.125×2 = 8.125in of labels; page box is 8.26in. */
+        #labels-container {
+            grid-template-columns: repeat(3, 2.625in);
+            column-gap: 0.125in;
+            row-gap: 0;
+            width: 8.125in;
+        }
+
         .label {
             /* Avery 5160 labels — CSS and HTML*/
             width: 2.625in;
             height: 1in;
             padding: .125in .125in .125in .125in;
-            float: left;
+            margin: 0;
             text-align: left;
             outline: .5px solid;
+            border: none;
             border-radius: 10px;
             vertical-align: middle;
             break-inside: avoid;
             position: relative;
-            margin-right: 0.125in;
+            overflow: hidden;
         }
 
         .label,
@@ -1252,8 +1270,11 @@ addEventListener("load", (event) => {
         }
 
         .label-text {
+            display: block;
             width: 100%;
             height: 100%;
+            margin: 0;
+            padding: 0;
             white-space: nowrap;
             resize: none;
             border: none;
@@ -1295,7 +1316,7 @@ addEventListener("load", (event) => {
                 background: #fff !important;
             }
             #labels-container {
-                display: block !important;
+                display: grid !important;
             }
         }
 
@@ -1749,7 +1770,7 @@ addEventListener("load", (event) => {
         }
 
         body.showing-labels #labels-container {
-            display: block;
+            display: grid;
         }
 
         .label-toolbar {
